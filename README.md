@@ -81,6 +81,14 @@ extension's control.
 - Building from source needs Xcode and [xcodegen](https://github.com/yonaskolb/XcodeGen);
   `project.yml` is the source of truth and the `.xcodeproj` is generated.
 
+## While reading
+
+![The chapter being read highlighted in the sidebar](docs/screenshot-chapter.png)
+
+The chapter you are reading is highlighted in the table of contents as you scroll, and the
+part it lives in unfolds itself so that entry stays in view. In a bilingual edition the
+book's own cross-links (here 英文 / 中文) work as well.
+
 ## Known limitations
 
 - **Very large MOBI bodies are cut at 8 MB of text.** Reference works can go past that; the

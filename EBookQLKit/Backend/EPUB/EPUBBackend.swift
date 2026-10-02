@@ -93,7 +93,14 @@ public final class EPUBBackend: BookBackend {
             sections: sections,
             toc: package.toc,
             tocBasePath: package.tocBasePath,
-            resources: EPUBResourceProvider(source: source)
+            // The declared list is the publisher's, but it is not always the more useful
+            // one: this book's nav lists its twelve files while the text marks 383 headings
+            // inside them, so a sidebar built from the declaration alone shows a twelfth of
+            // the structure. Marked as a fallback, so the heading derivation takes over when
+            // it yields more - the same rule MOBI books already follow - and a book whose
+            // own list is richer keeps it (265 for one EPUB against a single heading).
+            resources: EPUBResourceProvider(source: source),
+            tocIsFallback: true
         )
     }
 

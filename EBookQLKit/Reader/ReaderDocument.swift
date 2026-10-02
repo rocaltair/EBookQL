@@ -89,15 +89,13 @@ public struct ReaderDocument {
             sectionsHTML += "\n<section class=\"chapter\" id=\"ch\(index)\">\n\(bodyAnchor)\(body)\n</section>\n"
         }
 
-        // A format-declared TOC wins; otherwise derive one from the headings - that is
-        // what gives MOBI books, and EPUBs with no nav or NCX, a sidebar.
-        //
-        // A fallback TOC (a MOBI's NCX) is the publisher's own list, and the heading
-        // derivation stands in for books that carry none - so the derivation only takes
-        // over when it actually yields more. It does for a book whose chapters are marked
-        // with headings and whose NCX lists only the top level (measured: 267 entries from
-        // headings against 28 from the NCX), and it must not for a book whose whole text
-        // contains a single heading - its own "Contents" title - against an NCX of 314.
+        // The declared TOC is the publisher's own list, but it is not always the more useful
+        // one - a book can declare twelve files while marking hundreds of headings inside
+        // them - so a backend that marks its list as a fallback lets the heading derivation
+        // take over when that yields more. Measured both ways: 267 entries from headings
+        // against 28 declared, and 383 against 12; and the other way round, 314 declared
+        // against a single heading for a book whose only heading is its "Contents" title,
+        // where the declaration must win.
         let derived = tocTree(from: headings)
         let entries: [TOCEntry]
         if book.tocIsFallback && count(derived) > count(book.toc) {

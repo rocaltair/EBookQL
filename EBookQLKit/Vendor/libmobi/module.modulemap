@@ -1,0 +1,14 @@
+// Lets the Swift side of EBookQLKit call libmobi.
+//
+// Only MobiShim.h is exposed. Putting libmobi's own headers in the module would make
+// Clang treat them as module headers while the library's .c files include them
+// textually, which fails with "typedef redefinition with different types" in
+// buffer.h. MobiShim.h is self-contained, so the module stays clean and Swift never
+// sees libmobi's structs.
+//
+// The Swift compiler finds this map because EBookQLKit puts its own directory on the
+// header search path.
+module MobiLib {
+    header "MobiShim.h"
+    export *
+}

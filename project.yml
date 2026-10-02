@@ -1,0 +1,174 @@
+# EBookQL — Quick Look preview + thumbnail extensions for EPUB and MOBI (Kindle) books.
+#
+#   xcodegen generate      # writes EBookQL.xcodeproj from this file
+#   ./install.sh           # build a Release app and copy it to /Applications
+#
+# Four targets: the host application that carries the extensions, a Quick Look
+# preview extension, a Quick Look thumbnail extension, and the shared framework
+# (EBookQLKit) that holds every format backend, the reader page and the reading
+# position store. Edit this file, not the generated project.
+
+name: EBookQL
+
+options:
+  bundleIdPrefix: com.rocaltair
+  deploymentTarget:
+    macOS: "14.0"
+  createIntermediateGroups: true
+  generateEmptyDirectories: false
+
+settings:
+  base:
+    ALWAYS_SEARCH_USER_PATHS: NO
+    CLANG_ENABLE_MODULES: YES
+    CLANG_ENABLE_OBJC_ARC: YES
+    SWIFT_VERSION: "5.0"
+    MARKETING_VERSION: "0.1.0"
+    CURRENT_PROJECT_VERSION: "1"
+    GENERATE_INFOPLIST_FILE: NO
+    DEAD_CODE_STRIPPING: YES
+    # Release builds must not carry the debugging entitlement ("get-task-allow"):
+    # Quick Look badges such extensions as [DEBUG] in the preview window.
+    CODE_SIGN_INJECT_BASE_ENTITLEMENTS: NO
+    # Sign to Run Locally: ad-hoc signature, no developer account needed.
+    CODE_SIGN_STYLE: Manual
+    CODE_SIGN_IDENTITY: "-"
+    DEVELOPMENT_TEAM: ""
+
+# Shared schemes, so `xcodebuild -scheme EBookQL` works on a fresh clone
+# (xcodegen writes no schemes unless they are declared here).
+schemes:
+  EBookQL:
+    build:
+      targets:
+        EBookQL: all
+  EBookQLPreview:
+    build:
+      targets:
+        EBookQLPreview: all
+  EBookQLThumbnail:
+    build:
+      targets:
+        EBookQLThumbnail: all
+
+packages:
+  ZIPFoundation:
+    url: https://github.com/weichsel/ZIPFoundation
+    from: 0.9.19
+
+targets:
+
+  # Shared core: format backends, the reader page, the reading-position store.
+  #
+  # A *static* library on purpose. An embedded dynamic framework cannot be loaded
+  # by an ad-hoc-signed app extension: Library Validation compares the two
+  # signatures, finds no matching Team ID, and the extension dies in dyld before
+  # it runs ("different Team IDs"). Static linking has no dylib and no such check,
+  # which is also how both reference projects (MobiFile, epub-quicklook-extension)
+  # share their parsing code.
+  EBookQLKit:
+    type: library.static
+    platform: macOS
+    sources:
+      - path: EBookQLKit
+        # Found through HEADER_SEARCH_PATHS instead (see below), not compiled.
+        excludes: ["Vendor/libmobi/module.modulemap"]
+    settings:
+      base:
+        PRODUCT_NAME: EBookQLKit
+        GCC_C_LANGUAGE_STANDARD: gnu99
+        HEADER_SEARCH_PATHS:
+          # The module map that exposes the vendored libmobi to Swift lives here.
+          - "$(SRCROOT)/EBookQLKit/Vendor/libmobi"
+          - "$(SDKROOT)/usr/include/libxml2"
+    dependencies:
+      - package: ZIPFoundation
+
+  # Host application: exists to carry the two extensions and to declare the UTIs.
+  EBookQL:
+    type: application
+    platform: macOS
+    sources:
+      - path: EBookQLApp
+        excludes: ["Info.plist"]
+    settings:
+      base:
+        PRODUCT_NAME: EBookQL
+        PRODUCT_BUNDLE_IDENTIFIER: com.rocaltair.EBookQL
+        INFOPLIST_FILE: EBookQLApp/Info.plist
+        COMBINE_HIDPI_IMAGES: YES
+    dependencies:
+      - target: EBookQLPreview
+        embed: true
+        codeSign: true
+        copy:
+          destination: plugins
+          subpath: ""
+      - target: EBookQLThumbnail
+        embed: true
+        codeSign: true
+        copy:
+          destination: plugins
+          subpath: ""
+
+  EBookQLPreview:
+    type: app-extension
+    platform: macOS
+    sources:
+      - path: EBookQLPreview
+        excludes: ["Info.plist", "*.entitlements"]
+    settings:
+      base:
+        PRODUCT_NAME: EBookQLPreview
+        PRODUCT_BUNDLE_IDENTIFIER: com.rocaltair.EBookQL.Preview
+        INFOPLIST_FILE: EBookQLPreview/Info.plist
+        CODE_SIGN_ENTITLEMENTS: EBookQLPreview/EBookQLPreview.entitlements
+        ENABLE_HARDENED_RUNTIME: YES
+        OTHER_LDFLAGS:
+          - "-framework"
+          - "WebKit"
+          - "-framework"
+          - "QuickLookUI"
+          # The extension context class for com.apple.quicklook.preview lives in
+          # QuickLookUI, and without it the extension dies in
+          # +[EXConcreteExtensionContextVendor _extensionContextClass] as soon as
+          # the host connects. `needed` keeps the framework even though nothing
+          # in our code references one of its classes.
+          - "-Wl,-needed_framework,QuickLookUI"
+          # libmobi (vendored in EBookQLKit) needs both; a static library cannot
+          # link, so the extension does it.
+          - "-lxml2"
+          - "-lz"
+          # Reading positions (ReadingPositionStore).
+          - "-lsqlite3"
+        # EBookQLKit's module pulls in the MobiLib C module, so the appex has to be
+        # able to find its module map too.
+        HEADER_SEARCH_PATHS:
+          - "$(SRCROOT)/EBookQLKit/Vendor/libmobi"
+    dependencies:
+      - target: EBookQLKit
+      # A static library cannot link, so the appex links the package product too.
+      - package: ZIPFoundation
+
+  EBookQLThumbnail:
+    type: app-extension
+    platform: macOS
+    sources:
+      - path: EBookQLThumbnail
+        excludes: ["Info.plist", "*.entitlements"]
+    settings:
+      base:
+        PRODUCT_NAME: EBookQLThumbnail
+        PRODUCT_BUNDLE_IDENTIFIER: com.rocaltair.EBookQL.Thumbnail
+        INFOPLIST_FILE: EBookQLThumbnail/Info.plist
+        CODE_SIGN_ENTITLEMENTS: EBookQLThumbnail/EBookQLThumbnail.entitlements
+        ENABLE_HARDENED_RUNTIME: YES
+        OTHER_LDFLAGS:
+          - "-lxml2"
+          - "-lz"
+          - "-lsqlite3"
+        HEADER_SEARCH_PATHS:
+          - "$(SRCROOT)/EBookQLKit/Vendor/libmobi"
+    dependencies:
+      - target: EBookQLKit
+      - package: ZIPFoundation

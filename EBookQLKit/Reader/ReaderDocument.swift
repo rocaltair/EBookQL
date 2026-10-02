@@ -1,0 +1,334 @@
+//
+//  ReaderDocument.swift
+//  EBookQLKit
+//
+//  Book -> the single page the preview loads. This is where every format becomes
+//  the same thing: chapters merged into one scrollable page with per-chapter
+//  anchor prefixes, one table-of-contents sidebar, one stylesheet, one script.
+//
+
+import Foundation
+
+public struct ReaderDocument {
+
+    public struct Options: Sendable {
+        public var readingPosition: ReadingPosition?
+        public var sidebarWidth: Int?
+        public var zoom: Double
+        /// "Contents" in the user's language.
+        public var tocTitle: String
+
+        public init(
+            readingPosition: ReadingPosition? = nil,
+            sidebarWidth: Int? = nil,
+            zoom: Double = 1.0,
+            tocTitle: String = ReaderDocument.localizedTOCTitle()
+        ) {
+            self.readingPosition = readingPosition
+            self.sidebarWidth = sidebarWidth
+            self.zoom = zoom
+            self.tocTitle = tocTitle
+        }
+    }
+
+    /// The sidebar label in the user's language; the extension is not localised
+    /// itself, so this is the one place the choice is made.
+    public static func localizedTOCTitle() -> String {
+        let language = Locale.preferredLanguages.first?.lowercased() ?? "en"
+        return language.hasPrefix("zh") ? "目录" : "Contents"
+    }
+
+    /// Cap on how many sidebar rows a book may produce: a 27-volume bundle must not
+    /// build a thousand-item list.
+    private static let tocEntryLimit = 800
+
+    // MARK: - Build
+
+    public static func build(_ book: Book, options: Options = Options()) throws -> (html: String, baseURL: URL?) {
+        // Root-relative document path -> section index, for turning cross-file links
+        // and TOC references into in-page anchors.
+        var sectionIndexByPath: [String: Int] = [:]
+        for (index, section) in book.sections.enumerated() {
+            if let path = section.sourcePath, sectionIndexByPath[path] == nil {
+                sectionIndexByPath[path] = index
+            }
+        }
+
+        var sectionsHTML = ""
+        var headings: [HTMLNormalizer.HeadingEntry] = []
+        var headingIndex = 0
+
+        for (index, section) in book.sections.enumerated() {
+            // Order matters: ids are namespaced first, then headings get ids, then
+            // references are rewritten against the final markup.
+            var body = HTMLNormalizer.prefixAnchors(in: section.html, chapter: index)
+
+            let injected = HTMLNormalizer.injectHeadingAnchors(
+                in: body,
+                chapter: index,
+                startingIndex: headingIndex,
+                limit: max(0, tocEntryLimit - headings.count)
+            )
+            body = injected.html
+            headings.append(contentsOf: injected.entries)
+            headingIndex = injected.nextIndex
+
+            body = HTMLNormalizer.rewriteLinks(
+                in: body,
+                section: section,
+                sectionIndexByPath: sectionIndexByPath,
+                resources: book.resources
+            )
+
+            // Split books (Calibre/Sigil) target the chapter file's `<body id="…">`;
+            // keep that anchor alive in the merged page.
+            var bodyAnchor = ""
+            if let bodyID = section.bodyID, !bodyID.isEmpty {
+                bodyAnchor = "<span class=\"anchor-target\" id=\"ch\(index)--\(HTMLNormalizer.escapeHTML(bodyID))\"></span>"
+            }
+            sectionsHTML += "\n<section class=\"chapter\" id=\"ch\(index)\">\n\(bodyAnchor)\(body)\n</section>\n"
+        }
+
+        // A format-declared TOC wins; otherwise derive one from the headings - that is
+        // what gives MOBI books, and EPUBs with no nav or NCX, a sidebar.
+        //
+        // A fallback TOC (a MOBI's NCX) is the publisher's own list, and the heading
+        // derivation stands in for books that carry none - so the derivation only takes
+        // over when it actually yields more. It does for a book whose chapters are marked
+        // with headings and whose NCX lists only the top level (measured: 267 entries from
+        // headings against 28 from the NCX), and it must not for a book whose whole text
+        // contains a single heading - its own "Contents" title - against an NCX of 314.
+        let derived = tocTree(from: headings)
+        let entries: [TOCEntry]
+        if book.tocIsFallback && count(derived) > count(book.toc) {
+            entries = derived
+        } else if book.toc.isEmpty {
+            entries = derived
+        } else {
+            entries = book.toc
+        }
+
+        let sidebar = renderSidebar(
+            entries: entries,
+            sectionIndexByPath: sectionIndexByPath,
+            title: options.tocTitle,
+            truncated: book.truncatedAt,
+            totalBytes: book.contentBytes
+        )
+
+        let html = """
+        <!doctype html>
+        <html>
+        <head>
+            <meta charset="utf-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+            <title>\(HTMLNormalizer.escapeHTML(book.metadata.title ?? book.url.lastPathComponent))</title>
+            <style>\(ReaderAssets.css)</style>
+        </head>
+        <body class="\(sidebar == nil ? "no-toc" : "")">
+            \(sidebar ?? "")
+            <div id="content">\(sectionsHTML)</div>
+            <script>window.__ql = \(injectedState(options));</script>
+            <script>\(ReaderAssets.js)</script>
+        </body>
+        </html>
+        """
+        return (html: html, baseURL: nil)
+    }
+
+    // MARK: - Sidebar
+
+    /// The fixed sidebar, or nil when the book has neither a table of contents nor
+    /// anything else to say. A book without a sidebar must not be pushed right by
+    /// one - that is what the `no-toc` body class is for.
+    private static func renderSidebar(
+        entries: [TOCEntry],
+        sectionIndexByPath: [String: Int],
+        title: String,
+        truncated: Int?,
+        totalBytes: Int?
+    ) -> String? {
+        let list = renderList(entries, sectionIndexByPath: sectionIndexByPath)
+
+        var note = ""
+        if let truncated {
+            let shown = Double(truncated) / 1_048_576.0
+            let total = Double(totalBytes ?? truncated) / 1_048_576.0
+            note = "<div class=\"toc-note\">Truncated preview: showing the first "
+                + String(format: "%.0f", shown) + " MB of " + String(format: "%.0f", total) + " MB.</div>"
+        }
+        guard !list.isEmpty || !note.isEmpty else { return nil }
+
+        let heading = HTMLNormalizer.escapeHTML(title)
+        return """
+        <nav id="toc" aria-label="Contents">
+            <div id="toc-head">
+                <span>\(heading)</span>
+                <span id="toc-zoom">
+                    <button id="zoom-out" type="button" title="Smaller text">A−</button>
+                    <button id="zoom-level" type="button" title="Back to 100%">100%</button>
+                    <button id="zoom-in" type="button" title="Larger text">A+</button>
+                </span>
+                <button id="toc-hide" type="button" title="Hide">‹</button>
+            </div>
+            \(note)
+            <ul class="toc-list">\(list)</ul>
+        </nav>
+        <div id="toc-resizer" role="separator" aria-orientation="vertical" title="Drag to resize"></div>
+        <button id="toc-show" type="button" title="Show">\(heading)</button>
+        """
+    }
+
+    private static func renderList(_ entries: [TOCEntry], sectionIndexByPath: [String: Int]) -> String {
+        var out = ""
+        for entry in entries {
+            let children = renderList(entry.children, sectionIndexByPath: sectionIndexByPath)
+            let label = HTMLNormalizer.escapeHTML(entry.title)
+
+            let title: String
+            if let href = resolve(entry.target, sectionIndexByPath: sectionIndexByPath) {
+                title = "<a href=\"\(href)\">\(label)</a>"
+            } else {
+                title = "<span class=\"toc-label\">\(label)</span>"
+            }
+
+            let cssClass = children.isEmpty ? "toc-item" : "toc-item has-children"
+            let toggle = children.isEmpty
+                ? ""
+                : "<button class=\"toc-toggle\" type=\"button\" title=\"Fold / unfold\"></button>"
+            out += "<li class=\"\(cssClass)\">\(toggle)\(title)"
+                + (children.isEmpty ? "" : "<ul class=\"toc-list\">\(children)</ul>") + "</li>"
+        }
+        return out
+    }
+
+    /// Maps a TOC target onto an in-page anchor.
+    private static func resolve(_ target: BookTarget?, sectionIndexByPath: [String: Int]) -> String? {
+        guard let target else { return nil }
+        let fragment = target.fragment
+
+        // No document: a heading-derived entry, whose anchor is already namespaced.
+        guard let path = target.sectionPath else {
+            guard let fragment, !fragment.isEmpty else { return nil }
+            return "#\(fragment)"
+        }
+        guard let index = sectionIndexByPath[path] else { return nil }
+        if let fragment, !fragment.isEmpty { return "#ch\(index)--\(fragment)" }
+        return "#ch\(index)"
+    }
+
+    // MARK: - Headings -> tree
+
+    /// Every entry in the tree, children included - so two tables of contents can be
+    /// compared by how much they actually offer.
+    private static func count(_ entries: [TOCEntry]) -> Int {
+        entries.reduce(0) { $0 + 1 + count($1.children) }
+    }
+
+    /// Turns document-ordered headings into a nested table of contents by level.
+    private static func tocTree(from headings: [HTMLNormalizer.HeadingEntry]) -> [TOCEntry] {
+        var index = 0
+        return buildEntries(headings, &index, level: 1)
+    }
+
+    private static func buildEntries(
+        _ headings: [HTMLNormalizer.HeadingEntry],
+        _ index: inout Int,
+        level: Int
+    ) -> [TOCEntry] {
+        var out: [TOCEntry] = []
+        while index < headings.count {
+            let heading = headings[index]
+            if heading.level < level { break }
+            index += 1
+            let children = buildEntries(headings, &index, level: heading.level + 1)
+            out.append(TOCEntry(
+                title: heading.title,
+                target: BookTarget(sectionPath: nil, fragment: heading.anchor),
+                children: children
+            ))
+        }
+        return out
+    }
+
+    // MARK: - Fallback pages
+
+    /// Self-contained page for a file no backend could open.
+    public static func placeholderHTML(fileName: String, options: Options = Options()) -> String {
+        page(title: fileName, body: """
+        <div class="notice">
+            <h1>No reader for this file yet</h1>
+            <p>EBookQL does not have a preview backend for this file type yet.</p>
+            <p class="file">\(HTMLNormalizer.escapeHTML(fileName))</p>
+        </div>
+        """, options: options)
+    }
+
+    /// A page explaining why a book could not be previewed.
+    public static func noticeHTML(
+        summary: String,
+        detail: String,
+        fileName: String,
+        options: Options = Options()
+    ) -> String {
+        page(title: summary, body: """
+        <div class="notice">
+            <h1>\(HTMLNormalizer.escapeHTML(summary))</h1>
+            <p>\(HTMLNormalizer.escapeHTML(detail))</p>
+            <p class="file">\(HTMLNormalizer.escapeHTML(fileName))</p>
+        </div>
+        """, options: options)
+    }
+
+    private static func page(title: String, body: String, options: Options) -> String {
+        """
+        <!doctype html>
+        <html>
+        <head>
+            <meta charset="utf-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+            <title>\(HTMLNormalizer.escapeHTML(title))</title>
+            <style>
+            :root { color-scheme: light dark; }
+            html, body { margin: 0; }
+            body { font: -apple-system-body; line-height: 1.6; background: #f7f7f8; color: #1c1c1e; }
+            @media (prefers-color-scheme: dark) { body { background: #202022; color: #e8e8ea; } }
+            main { padding: 48px 40px; }
+            .stub { margin-top: 2em; opacity: .5; font-size: .85em; }
+            .notice { max-width: 34em; margin: 0 auto; padding: 22px 26px;
+                      border: 1px solid rgba(128,128,128,.35); border-radius: 10px;
+                      background: rgba(128,128,128,.07); }
+            .notice h1 { font-size: 17px; margin: 0 0 10px; }
+            .notice p { margin: 0 0 8px; opacity: .85; }
+            .notice .file { font-size: 12.5px; opacity: .6; word-break: break-all; }
+            </style>
+        </head>
+        <body>
+            <main>\(body)</main>
+            <script>window.__ql = \(injectedState(options));</script>
+        </body>
+        </html>
+        """
+    }
+
+    // MARK: - Internals
+
+    private static func injectedState(_ options: Options) -> String {
+        var dict: [String: Any] = ["zoom": options.zoom]
+        if let width = options.sidebarWidth { dict["sidebarWidth"] = width }
+        if let position = options.readingPosition {
+            var payload: [String: Any] = [
+                "sectionOffset": position.sectionOffset,
+                "fraction": position.fraction,
+                "scrollY": position.scrollY,
+            ]
+            if let anchor = position.anchor { payload["anchor"] = anchor }
+            dict["position"] = payload
+        } else {
+            dict["position"] = NSNull()
+        }
+        guard let data = try? JSONSerialization.data(withJSONObject: dict),
+              let json = String(data: data, encoding: .utf8) else { return "{}" }
+        return json
+    }
+}

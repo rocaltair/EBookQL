@@ -1,0 +1,22 @@
+# Xcode / xcodegen
+build/
+DerivedData/
+*.xcodeproj
+*.xcworkspace
+xcuserdata/
+*.xcuserstate
+
+# macOS
+.DS_Store
+
+# The books used for testing. Large (416 MB, two of them are 154/232 MB) and not ours to
+# redistribute, so they stay out of the repository; keep them in the working copy only.
+test-books/
+
+# The design journal: decisions, measurements and the traps hit along the way. A working
+# document kept in the working copy, not part of what the repository publishes.
+DESIGN.md
+
+# Releases
+dist/*.zip
+dist/*.dmg

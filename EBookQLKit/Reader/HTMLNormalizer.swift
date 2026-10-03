@@ -88,24 +88,31 @@ public enum HTMLNormalizer {
     // MARK: - Links and resources
 
     /// Rewrites `src` / `href`: a link to another spine document becomes an in-page
-    /// anchor, and every other local reference becomes the URL its resource
-    /// provider hands back (a file URL, or the archive scheme).
+    /// anchor, and every other local reference becomes the URL its resource provider
+    /// hands back (a file URL, or the archive scheme). A remote image is replaced by
+    /// a placeholder unless `allowRemoteImages` says the reader asked for it.
     public static func rewriteLinks(
         in html: String,
         section: BookSection,
         sectionIndexByPath: [String: Int],
-        resources: ResourceProvider?
+        resources: ResourceProvider?,
+        allowRemoteImages: Bool = false
     ) -> String {
         var out = html
         for attribute in ["src", "href", "poster"] {
-            out = out.replacingOccurrences(of: "\(attribute)=\"([^\"]+)\"") { match, matched in
+            // One pattern for the three attributes: a raw string keeps it free of
+            // escapes, and the attribute name is spliced in.
+            let pattern = #"ATTRIBUTE="([^"]+)""#
+                .replacingOccurrences(of: "ATTRIBUTE", with: attribute)
+            out = out.replacingOccurrences(of: pattern) { match, matched in
                 let ns = matched as NSString
                 let capture = rangeWithinMatch(match.range(at: 1), match.range)
                 guard capture.length > 0 else { return matched }
                 let raw = ns.substring(with: capture).replacingOccurrences(of: "&amp;", with: "&")
                 guard let replacement = resolveReference(
                     raw, attribute: attribute, section: section,
-                    sectionIndexByPath: sectionIndexByPath, resources: resources
+                    sectionIndexByPath: sectionIndexByPath, resources: resources,
+                    allowRemoteImages: allowRemoteImages
                 ) else { return matched }
                 return ns.replacingCharacters(in: capture, with: replacement)
             }
@@ -118,11 +125,21 @@ public enum HTMLNormalizer {
         attribute: String,
         section: BookSection,
         sectionIndexByPath: [String: Int],
-        resources: ResourceProvider?
+        resources: ResourceProvider?,
+        allowRemoteImages: Bool
     ) -> String? {
         guard !value.isEmpty, !value.hasPrefix("#") else { return nil }
         let lower = value.lowercased()
-        let external = ["http:", "https:", "file:", "data:", "mailto:", "tel:", "javascript:", "blob:"]
+        // A remote image is never fetched unless the reader asked for it: a preview
+        // that quietly opens a network connection is not a default anyone opted into
+        // (and a plain-http one is refused by App Transport Security besides). A
+        // remote `href` is left alone - clicking a link is an explicit act, and the
+        // reader's browser is what opens it, not the preview.
+        if lower.hasPrefix("http:") || lower.hasPrefix("https:") || value.hasPrefix("//") {
+            guard attribute != "href" else { return nil }
+            return allowRemoteImages ? nil : blockedImage(imageAt: value)
+        }
+        let external = ["file:", "data:", "mailto:", "tel:", "javascript:", "blob:"]
         guard !external.contains(where: { lower.hasPrefix($0) }) else { return nil }
         // A bare fragment is handled by prefixAnchors.
         let (path, fragment) = BookPath.splitFragment(value)
@@ -138,6 +155,29 @@ public enum HTMLNormalizer {
             return "\(url)#\(fragment)"
         }
         return url
+    }
+
+    /// Stands in for a remote image that was not fetched. Clearing the `src` would
+    /// leave nothing at all, and WebKit's broken-image glyph reads as "this preview
+    /// is broken" - so the block says what it is, and which host was not contacted.
+    /// Single quotes inside the SVG, a plain concatenation outside it: no escape has
+    /// to survive two layers of string literals.
+    static func blockedImage(imageAt value: String) -> String {
+        let parsable = value.hasPrefix("//") ? "https:" + value : value
+        let host = URL(string: parsable)?.host ?? ""
+        let label = host.isEmpty ? "Network image blocked" : "Network image blocked: " + escapeHTML(host)
+        let note = "Turn network images on in EBookQL settings"
+        let svg = "<svg xmlns='http://www.w3.org/2000/svg' width='360' height='76'>"
+            + "<rect width='360' height='76' rx='8' fill='rgba(128,128,128,.12)'/>"
+            + "<rect x='6.5' y='6.5' width='347' height='63' rx='6' fill='none'"
+            + " stroke='rgba(128,128,128,.5)' stroke-dasharray='6 4'/>"
+            + "<text x='180' y='38' text-anchor='middle' font-family='-apple-system,Helvetica,sans-serif'"
+            + " font-size='13' fill='#88888c'>" + label + "</text>"
+            + "<text x='180' y='56' text-anchor='middle' font-family='-apple-system,Helvetica,sans-serif'"
+            + " font-size='11' fill='#9a9a9e'>" + note + "</text>"
+            + "</svg>"
+        let encoded = svg.addingPercentEncoding(withAllowedCharacters: .alphanumerics) ?? ""
+        return "data:image/svg+xml;charset=utf-8," + encoded
     }
 
     // MARK: - Headings -> TOC

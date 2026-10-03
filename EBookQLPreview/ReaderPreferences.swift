@@ -22,11 +22,16 @@ struct ReaderPreferences: Codable {
     var jsParse: Bool = true
     var theme: MarkdownTheme = .system
     var showLineNumbers: Bool = false
+    /// Whether Markdown previews may fetch remote (http/https) images. Off unless
+    /// the reader turned it on in the host window; EPUB/MOBI ignore it and never
+    /// load remote images.
+    var allowNetworkImages: Bool = false
 
     enum CodingKeys: String, CodingKey {
         case jsParse
         case theme
         case showLineNumbers
+        case allowNetworkImages
     }
 
     init() {}
@@ -40,6 +45,7 @@ struct ReaderPreferences: Codable {
         jsParse = try container.decodeIfPresent(Bool.self, forKey: .jsParse) ?? true
         theme = try container.decodeIfPresent(MarkdownTheme.self, forKey: .theme) ?? .system
         showLineNumbers = try container.decodeIfPresent(Bool.self, forKey: .showLineNumbers) ?? false
+        allowNetworkImages = try container.decodeIfPresent(Bool.self, forKey: .allowNetworkImages) ?? false
     }
 
     static func load() -> ReaderPreferences {

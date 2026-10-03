@@ -31,11 +31,22 @@ final class ReaderPreviewProvider: NSViewController, QLPreviewingController, WKN
     /// and it is remembered across previews.
     private static let zoomKey = "previewZoom"
     private static let sidebarWidthKey = "readerSidebarWidth"
+    /// Whether the contents sidebar folds itself back as the highlight moves on. Like
+    /// the width, a mode the reader set, remembered per user (per appex: the Markdown
+    /// extension has its own container, so the two keep their own choice, as they
+    /// already do for the width).
+    private static let autoFoldTOCKey = "readerAutoFoldTOC"
     private static let zoomLevels: [CGFloat] = [0.5, 0.67, 0.8, 0.9, 1.0, 1.1, 1.25, 1.5, 1.75, 2.0, 2.5, 3.0, 4.0]
 
     private static var storedZoom: CGFloat {
         let value = CGFloat(UserDefaults.standard.object(forKey: zoomKey) as? Double ?? 1.0)
         return min(max(value, zoomLevels.first!), zoomLevels.last!)
+    }
+
+    /// Unset means on. Read through `NSNumber` rather than `as? Bool` so a stored value
+    /// of an unexpected type can never be mistaken for "never set".
+    private static var storedAutoFold: Bool {
+        (UserDefaults.standard.object(forKey: autoFoldTOCKey) as? NSNumber)?.boolValue ?? true
     }
 
     private enum Message {
@@ -169,11 +180,13 @@ final class ReaderPreviewProvider: NSViewController, QLPreviewingController, WKN
         let options = ReaderDocument.Options(
             readingPosition: savedPosition,
             sidebarWidth: UserDefaults.standard.object(forKey: Self.sidebarWidthKey) as? Int,
+            autoFoldTOC: Self.storedAutoFold,
             zoom: Double(zoom),
+            allowNetworkImages: preferences?.allowNetworkImages ?? false,
             tocTitle: ReaderDocument.localizedTOCTitle(),
             theme: preferences.map { Self.resolvedTheme($0.theme) } ?? .system,
             markdownRendering: preferences?.jsParse ?? true,
-            showLineNumbers: preferences?.showLineNumbers ?? false
+            showLineNumbers: preferences?.showLineNumbers ?? false,
         )
 
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
@@ -326,8 +339,15 @@ final class ReaderPreviewProvider: NSViewController, QLPreviewingController, WKN
                    body["ms"] as? Int ?? -1)
             return
         }
-        guard let width = body["sidebarWidth"] as? Int else { return }
-        UserDefaults.standard.set(min(max(width, 80), 2000), forKey: Self.sidebarWidthKey)
+        // Both settings the page owns: the sidebar width it was dragged to and the
+        // auto-fold mode it was switched to. Each is stored on its own, so a message
+        // carrying one does not have to carry the other.
+        if let width = body["sidebarWidth"] as? Int {
+            UserDefaults.standard.set(min(max(width, 80), 2000), forKey: Self.sidebarWidthKey)
+        }
+        if let autoFold = (body["autoFoldTOC"] as? NSNumber)?.boolValue {
+            UserDefaults.standard.set(autoFold, forKey: Self.autoFoldTOCKey)
+        }
     }
 
     /// The page's controls report a step; the extension clamps it, applies it, and

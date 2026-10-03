@@ -14,7 +14,18 @@ public struct ReaderDocument {
     public struct Options: Sendable {
         public var readingPosition: ReadingPosition?
         public var sidebarWidth: Int?
+        /// Whether the contents sidebar folds itself back as the highlight moves on:
+        /// the branches the entry just left closes, the new entry's open. Off keeps
+        /// the highlight following (and still opens the branch it landed in, or the
+        /// highlight would sit inside a folded branch and never be seen) and only
+        /// stops the closing. The sidebar's own switch flips it; `window.__ql`
+        /// carries it into the page.
+        public var autoFoldTOC: Bool
         public var zoom: Double
+        /// Whether a markdown book may fetch its remote (http/https) images. Off
+        /// unless the reader turned it on in the host window; only Markdown is given
+        /// the choice, and every other format's page never loads one.
+        public var allowNetworkImages: Bool
         /// "Contents" in the user's language.
         public var tocTitle: String
         /// Colour scheme, honoured only by markdown books. Every other format keeps
@@ -30,7 +41,9 @@ public struct ReaderDocument {
         public init(
             readingPosition: ReadingPosition? = nil,
             sidebarWidth: Int? = nil,
+            autoFoldTOC: Bool = true,
             zoom: Double = 1.0,
+            allowNetworkImages: Bool = false,
             tocTitle: String = ReaderDocument.localizedTOCTitle(),
             theme: MarkdownTheme = .system,
             markdownRendering: Bool = true,
@@ -38,7 +51,9 @@ public struct ReaderDocument {
         ) {
             self.readingPosition = readingPosition
             self.sidebarWidth = sidebarWidth
+            self.autoFoldTOC = autoFoldTOC
             self.zoom = zoom
+            self.allowNetworkImages = allowNetworkImages
             self.tocTitle = tocTitle
             self.theme = theme
             self.markdownRendering = markdownRendering
@@ -92,7 +107,10 @@ public struct ReaderDocument {
                 in: body,
                 section: section,
                 sectionIndexByPath: sectionIndexByPath,
-                resources: book.resources
+                resources: book.resources,
+                // Only Markdown has the switch; an EPUB/MOBI page never fetches a
+                // remote image, whatever the reader allowed for Markdown.
+                allowRemoteImages: book.format == .markdown && options.allowNetworkImages
             )
 
             // Split books (Calibre/Sigil) target the chapter file's `<body id="…">`;
@@ -126,7 +144,8 @@ public struct ReaderDocument {
             sectionIndexByPath: sectionIndexByPath,
             title: options.tocTitle,
             truncated: book.truncatedAt,
-            totalBytes: book.contentBytes
+            totalBytes: book.contentBytes,
+            autoFold: options.autoFoldTOC
         )
 
         // Only a markdown book resolves a concrete scheme and tags the root with it.
@@ -168,7 +187,8 @@ public struct ReaderDocument {
         sectionIndexByPath: [String: Int],
         title: String,
         truncated: Int?,
-        totalBytes: Int?
+        totalBytes: Int?,
+        autoFold: Bool
     ) -> String? {
         let list = renderList(entries, sectionIndexByPath: sectionIndexByPath)
 
@@ -192,6 +212,8 @@ public struct ReaderDocument {
                     <button id="zoom-in" type="button" title="Larger text">A+</button>
                 </span>
                 <button id="toc-fold-toggle" type="button" title="Fold all">▸▸</button>
+                <button id="toc-fold-follow" type="button" aria-pressed="\(autoFold)"
+                        title="Auto-fold contents: \(autoFold ? "on" : "off")"></button>
                 <button id="toc-hide" type="button" title="Hide">‹</button>
             </div>
             <div id="toc-scroll">
@@ -356,6 +378,7 @@ public struct ReaderDocument {
             "theme": resolvedTheme(options.theme),
             "jsParse": options.markdownRendering,
             "lineNumbers": options.showLineNumbers,
+            "autoFoldTOC": options.autoFoldTOC,
         ]
         if let width = options.sidebarWidth { dict["sidebarWidth"] = width }
         if let position = options.readingPosition {

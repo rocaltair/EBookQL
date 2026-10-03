@@ -32,19 +32,27 @@ struct HostSettings: Codable {
     var jsParse: Bool
     var theme: ThemeChoice
     var showLineNumbers: Bool
+    /// Remote (http/https) images in Markdown previews. Off unless the reader turns
+    /// it on: a preview opening a network connection is the reader's decision, not a
+    /// default. EPUB/MOBI previews never load remote images at all.
+    var allowNetworkImages: Bool
 
-    static let defaults = HostSettings(jsParse: true, theme: .system, showLineNumbers: false)
+    static let defaults = HostSettings(
+        jsParse: true, theme: .system, showLineNumbers: false, allowNetworkImages: false
+    )
 
     enum CodingKeys: String, CodingKey {
         case jsParse
         case theme
         case showLineNumbers
+        case allowNetworkImages
     }
 
-    init(jsParse: Bool, theme: ThemeChoice, showLineNumbers: Bool) {
+    init(jsParse: Bool, theme: ThemeChoice, showLineNumbers: Bool, allowNetworkImages: Bool) {
         self.jsParse = jsParse
         self.theme = theme
         self.showLineNumbers = showLineNumbers
+        self.allowNetworkImages = allowNetworkImages
     }
 
     /// Tolerant decode: a settings file written before a key existed must not reset
@@ -56,6 +64,7 @@ struct HostSettings: Codable {
         jsParse = try container.decodeIfPresent(Bool.self, forKey: .jsParse) ?? true
         theme = try container.decodeIfPresent(ThemeChoice.self, forKey: .theme) ?? .system
         showLineNumbers = try container.decodeIfPresent(Bool.self, forKey: .showLineNumbers) ?? false
+        allowNetworkImages = try container.decodeIfPresent(Bool.self, forKey: .allowNetworkImages) ?? false
     }
 }
 

@@ -22,6 +22,16 @@
 	<string>$(CURRENT_PROJECT_VERSION)</string>
 	<key>LSMinimumSystemVersion</key>
 	<string>$(MACOSX_DEPLOYMENT_TARGET)</string>
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<!-- The reader can switch remote Markdown images on in the host window, and a
+		     plain-http one is refused here without this. Only WebView content is
+		     exempted (not URLSession), and only this appex carries the key: the
+		     EPUB/MOBI preview has no way to load a remote image at all, because the
+		     page builder never emits one for those formats. -->
+		<key>NSAllowsArbitraryLoadsInWebContent</key>
+		<true/>
+	</dict>
 	<key>NSExtension</key>
 	<dict>
 		<key>NSExtensionAttributes</key>

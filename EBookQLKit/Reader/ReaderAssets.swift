@@ -103,16 +103,36 @@ enum ReaderAssets {
     #toc-scroll { flex: 1 1 auto; min-height: 0; overflow-y: auto; }
     #toc-head > span:first-child { flex: 1 1 auto; }
     #toc-zoom { display: flex; align-items: center; gap: .24em; text-transform: none; letter-spacing: 0; }
-    #toc-zoom button, #toc-fold-toggle, #toc-hide, #toc-show {
+    #toc-zoom button, #toc-fold-toggle, #toc-fold-follow, #toc-hide, #toc-show {
         font: inherit; font-size: .88em; cursor: pointer; border: 1px solid var(--toc-border);
         background: var(--toc-bg); color: inherit; border-radius: .48em;
         padding: .08em .4em; opacity: .75;
     }
-    #toc-zoom button:hover, #toc-fold-toggle:hover, #toc-hide:hover, #toc-show:hover { opacity: 1; background: var(--hover-bg); }
+    #toc-zoom button:hover, #toc-fold-toggle:hover, #toc-fold-follow:hover, #toc-hide:hover, #toc-show:hover { opacity: 1; background: var(--hover-bg); }
     #toc-zoom #zoom-level { min-width: 2.88em; text-align: center; font-variant-numeric: tabular-nums; }
     /* One button, two states: ▸▸ folds everything, ▾▾ opens everything. Kept narrow so
-       title + A−/100%/A+ + this + hide all fit beside the title. */
+       title + A−/100%/A+ + this + the auto-fold switch + hide all fit beside the title. */
     #toc-fold-toggle { padding: .08em .3em; font-size: .8em; letter-spacing: -.06em; }
+    /* The auto-fold mode, drawn as a switch instead of a third triangle: the head
+       already spends ▸/▾ on folding, so a glyph here would be read as another fold
+       button. A track and a knob also need no glyph the system font might lack. */
+    #toc-fold-follow {
+        flex: 0 0 auto; position: relative; box-sizing: border-box;
+        width: 1.8em; height: 1em; padding: 0; border-radius: .5em; opacity: .8;
+    }
+    #toc-fold-follow::after {
+        content: ""; position: absolute; top: 50%; inset-inline-start: .12em;
+        width: .6em; height: .6em; margin-block-start: -.3em; border-radius: 50%;
+        background: currentColor; opacity: .4;
+        transition: inset-inline-start .12s ease, background .12s ease, opacity .12s ease;
+    }
+    #toc-fold-follow[aria-pressed="true"] {
+        background: var(--accent); border-color: var(--accent);
+    }
+    #toc-fold-follow[aria-pressed="true"]:hover { background: var(--accent); }
+    #toc-fold-follow[aria-pressed="true"]::after {
+        inset-inline-start: calc(100% - .72em); background: #fff; opacity: 1;
+    }
     #toc-show {
         position: fixed; z-index: 1; top: .8em; inset-inline-start: .8em; display: none;
         font-size: 12.5px;
@@ -176,6 +196,24 @@ enum ReaderAssets {
         background: rgba(128, 128, 128, .55);
     }
     #ekb-scrollbar:hover #ekb-scrollbar-thumb { background: rgba(90, 90, 90, .85); }
+
+    /* Where a link or an image really leads, along the foot of the text column -
+       Chrome's status bubble. Never hit-tested: a strip that can take the hover away
+       from the link under it makes the link flicker, which is exactly what the strip
+       exists to avoid. */
+    #ekb-status {
+        position: fixed; z-index: 4; display: none;
+        inset-block-end: 12px; inset-inline-start: calc(var(--toc-width) + 14px);
+        max-width: min(68ch, calc(100% - var(--toc-width) - 60px));
+        padding: 3px 9px; border-radius: 6px;
+        background: rgba(60, 60, 67, .92); color: #fff;
+        font-family: -apple-system, "PingFang SC", "Helvetica Neue", sans-serif;
+        font-size: 11.5px; line-height: 1.5;
+        white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+        pointer-events: none; -webkit-user-select: none; user-select: none;
+    }
+    #ekb-status.ekb-on { display: block; }
+    body.toc-collapsed #ekb-status { inset-inline-start: 14px; max-width: calc(100% - 60px); }
 
     #ekb-resume {
         position: fixed; left: 27%; bottom: 16px; z-index: 5;
@@ -517,6 +555,29 @@ enum ReaderAssets {
             });
         }
 
+        /* The auto-fold mode. It decides one thing only: whether `updateCurrent` closes
+           the branch it is leaving. With it off the entry being read still follows the
+           book and still opens its own branch - an entry folded away would be a
+           highlight nobody can see - and nothing is closed behind the reader. */
+        var foldFollow = document.getElementById('toc-fold-follow');
+        var autoFold = state.autoFoldTOC !== false;
+        function reflectAutoFold() {
+            if (!foldFollow) { return; }
+            foldFollow.setAttribute('aria-pressed', autoFold ? 'true' : 'false');
+            foldFollow.title = autoFold ? 'Auto-fold contents: on' : 'Auto-fold contents: off';
+        }
+        reflectAutoFold();
+        if (foldFollow) {
+            foldFollow.addEventListener('click', function () {
+                autoFold = !autoFold;
+                reflectAutoFold();
+                /* Remembered by the extension, like the sidebar width: a mode the reader
+                   has to set again on every preview is not a mode. Switching it back on
+                   folds nothing by itself - the next highlight change does that. */
+                send(uiBridge, { autoFoldTOC: autoFold });
+            });
+        }
+
         if (toc) {
             toc.querySelectorAll('li.has-children > .toc-toggle').forEach(function (button) {
                 button.addEventListener('click', function (event) {
@@ -558,9 +619,10 @@ enum ReaderAssets {
                     link.parentElement.classList.remove('collapsed');
                 });
             });
-            /* Top level open, everything nested folded. */
+            /* Everything starts folded: the sidebar opens as a bare outline, and the
+               follow-fold below is what opens the branch being read. */
             toc.querySelectorAll('li.has-children').forEach(function (item) {
-                if (item.parentElement.closest('li')) { item.classList.add('collapsed'); }
+                item.classList.add('collapsed');
             });
             reflectFoldState();
             /* Clicking an entry must not scroll the list itself: WebKit scrolls a
@@ -597,7 +659,8 @@ enum ReaderAssets {
         var resizer = document.getElementById('toc-resizer');
         if (resizer) {
             var root = document.documentElement;
-            var MIN_WIDTH = 120;      /* narrower than this and the titles are unreadable */
+            var MIN_WIDTH = 220;      /* measured: below this the header row (title + A−/100%/A+
+                                         + fold + auto-fold + hide) is squeezed or clipped */
             var RESERVED = 200;       /* keep this much for the text */
             var dragX = 0, dragWidth = 0, dragging = false;
 
@@ -607,8 +670,10 @@ enum ReaderAssets {
             function sidebarWidth() {
                 return toc ? toc.getBoundingClientRect().width : 0;
             }
-            /* The extension remembers the width per user; 25% of the panel otherwise. */
-            if (state.sidebarWidth) { applySidebarWidth(state.sidebarWidth); }
+            /* The extension remembers the width per user; 25% of the panel otherwise.
+               A width stored before the minimum was raised is lifted to it, or the
+               header row would come back clipped until the divider is dragged again. */
+            if (state.sidebarWidth) { applySidebarWidth(Math.max(state.sidebarWidth, MIN_WIDTH)); }
 
             resizer.addEventListener('pointerdown', function (event) {
                 if (!toc) { return; }
@@ -861,8 +926,9 @@ enum ReaderAssets {
                The chain it shared with the new entry stays open; a branch the reader
                opened by hand and is still looking at is not touched. Strict follow-fold
                (collapse everything not in the current chain) was tried and reverted:
-               it folded branches the reader had deliberately opened. */
-            if (previous) {
+               it folded branches the reader had deliberately opened. All of it is
+               skipped while the sidebar's auto-fold switch is off. */
+            if (autoFold && previous) {
                 ancestorsOf(previous.parentElement).forEach(function (branch) {
                     if (nowKeep.indexOf(branch) === -1) { branch.classList.add('collapsed'); }
                 });
@@ -887,6 +953,64 @@ enum ReaderAssets {
             scheduled = true;
             requestAnimationFrame(function () { scheduled = false; updateCurrent(); });
         }, { passive: true });
+
+        /* ---------- where a link or an image really leads ---------- */
+
+        /* Chrome's status bubble, at the foot of the text column. An in-page link
+           names the entry it lands on - the anchor ids here are chN--… , which is not
+           something to show a reader - and everything else, a remote image included,
+           shows the absolute URL the click would follow. */
+        var statusStrip = document.createElement('div');
+        statusStrip.id = 'ekb-status';
+        document.body.appendChild(statusStrip);
+
+        function statusTextFor(node) {
+            if (node.tagName === 'IMG') {
+                var source = node.currentSrc || node.getAttribute('src') || '';
+                /* A data: URL is not a destination, and the blocked-network-image tile
+                   already says what it is, in the page itself. */
+                return source.slice(0, 5) === 'data:' ? '' : source;
+            }
+            var href = node.getAttribute('href') || '';
+            if (href.charAt(0) !== '#') { return node.href || href; }
+            var target = targetOf(node);
+            if (!target) { return href; }
+            var text = leadingText(target, 80);
+            if (!text) { return href; }
+            return '→ ' + text + (text.length >= 80 ? '…' : '');
+        }
+
+        /* The first `limit` characters of text inside an element, stopping there. A
+           sidebar entry can point straight at a whole chapter (every entry of one
+           book did), and materialising a chapter's text on every hover is work the
+           reader would feel; the walker stops as soon as it has enough. Trim only
+           otherwise: `white-space: nowrap` collapses whatever is left, so no regex
+           and no escape is needed anywhere here. */
+        function leadingText(element, limit) {
+            var walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT, null);
+            var out = '', node;
+            while (out.length < limit && (node = walker.nextNode())) {
+                out += node.nodeValue;
+            }
+            return out.trim().slice(0, limit).trim();
+        }
+
+        document.addEventListener('mouseover', function (event) {
+            /* An image inside a link is a link: the link is what a click follows. */
+            var link = event.target.closest ? event.target.closest('a') : null;
+            var node = link || (event.target.closest ? event.target.closest('img') : null);
+            var text = node ? statusTextFor(node) : '';
+            if (text) {
+                statusStrip.textContent = text;
+                statusStrip.classList.add('ekb-on');
+            } else {
+                statusStrip.classList.remove('ekb-on');
+            }
+        }, true);
+
+        document.addEventListener('mouseout', function () {
+            statusStrip.classList.remove('ekb-on');
+        }, true);
 
         /* ---------- start ---------- */
 

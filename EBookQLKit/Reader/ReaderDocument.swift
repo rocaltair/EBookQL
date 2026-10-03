@@ -17,17 +17,32 @@ public struct ReaderDocument {
         public var zoom: Double
         /// "Contents" in the user's language.
         public var tocTitle: String
+        /// Colour scheme, honoured only by markdown books. Every other format keeps
+        /// following `prefers-color-scheme`; see `build`.
+        public var theme: MarkdownTheme
+        /// Whether a markdown book renders its markup (math + diagrams). Passed
+        /// through to the page as `window.__ql.jsParse` and gates the vendored assets.
+        public var markdownRendering: Bool
+        /// Whether markdown code blocks show line numbers. Passed through to the
+        /// page as `window.__ql.lineNumbers`; ignored by every other format.
+        public var showLineNumbers: Bool
 
         public init(
             readingPosition: ReadingPosition? = nil,
             sidebarWidth: Int? = nil,
             zoom: Double = 1.0,
-            tocTitle: String = ReaderDocument.localizedTOCTitle()
+            tocTitle: String = ReaderDocument.localizedTOCTitle(),
+            theme: MarkdownTheme = .system,
+            markdownRendering: Bool = true,
+            showLineNumbers: Bool = false
         ) {
             self.readingPosition = readingPosition
             self.sidebarWidth = sidebarWidth
             self.zoom = zoom
             self.tocTitle = tocTitle
+            self.theme = theme
+            self.markdownRendering = markdownRendering
+            self.showLineNumbers = showLineNumbers
         }
     }
 
@@ -114,9 +129,18 @@ public struct ReaderDocument {
             totalBytes: book.contentBytes
         )
 
+        // Only a markdown book resolves a concrete scheme and tags the root with it.
+        // An EPUB/MOBI page gets no attribute at all, so its stylesheet keeps following
+        // `prefers-color-scheme` exactly as before (see `resolvedTheme`). The same gate
+        // adds `data-format="markdown"`: every GitHub-flavored content rule in
+        // ReaderAssets.css is scoped under it, so the other formats cannot be touched.
+        let themeAttribute = book.format == .markdown
+            ? " data-theme=\"\(resolvedTheme(options.theme))\" data-format=\"markdown\""
+            : ""
+
         let html = """
         <!doctype html>
-        <html>
+        <html\(themeAttribute)>
         <head>
             <meta charset="utf-8">
             <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
@@ -314,8 +338,25 @@ public struct ReaderDocument {
 
     // MARK: - Internals
 
+    /// A `.system` choice has to leave here as one concrete scheme, because the page
+    /// decides dark/light itself from the attribute and the media query. The preview
+    /// resolves it against its own appearance and passes the result down; the kit has
+    /// no AppKit, so an unresolved `.system` falls back to light.
+    private static func resolvedTheme(_ theme: MarkdownTheme) -> String {
+        switch theme {
+        case .light: return "light"
+        case .dark: return "dark"
+        case .system: return "light"
+        }
+    }
+
     private static func injectedState(_ options: Options) -> String {
-        var dict: [String: Any] = ["zoom": options.zoom]
+        var dict: [String: Any] = [
+            "zoom": options.zoom,
+            "theme": resolvedTheme(options.theme),
+            "jsParse": options.markdownRendering,
+            "lineNumbers": options.showLineNumbers,
+        ]
         if let width = options.sidebarWidth { dict["sidebarWidth"] = width }
         if let position = options.readingPosition {
             var payload: [String: Any] = [

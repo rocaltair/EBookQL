@@ -1,14 +1,17 @@
 # EBookQLPreview
 
-Quick Look preview app-extension. macOS instantiates `ReaderPreviewProvider` via `NSExtensionPrincipalClass`; it parses the book, builds the HTML with `ReaderDocument`, and hosts it in a `WKWebView`.
+Quick Look preview app-extension for EPUB / MOBI / AZW / AZW3. macOS instantiates `ReaderPreviewProvider` via `NSExtensionPrincipalClass`; it parses the book, builds the HTML with `ReaderDocument`, and hosts it in a `WKWebView`. The Markdown-only sibling `EBookQLMarkdownPreview` reuses these same Swift sources (plus `ReaderAssets/`); only its Info.plist/entitlements and UTI list differ.
 
 ## WHERE TO LOOK
 | Task | Location |
 |------|----------|
 | Preview lifecycle + WebView + messages | ReaderPreviewProvider.swift:21 |
 | Quick Look entry point | ReaderPreviewProvider.swift:120 (`preparePreviewOfFile`) |
-| JS→native handlers (position / ui / zoom) | ReaderPreviewProvider.swift:255–330 |
-| `ekbres://` resource serving | ReaderSchemeHandler.swift |
+| Parse + page build off the main thread | ReaderPreviewProvider.swift:228 (`render`) |
+| JS→native handlers (position / ui / zoom) | ReaderPreviewProvider.swift:282 |
+| Markdown preference read (settings.json) | ReaderPreferences.swift:21 |
+| Markdown URL check + theme resolve | ReaderPreviewProvider.swift:254 (`isMarkdown`) / :261 (`resolvedTheme`) |
+| `ekbres://` resource serving (book + `assets` host) | ReaderSchemeHandler.swift |
 | Panel sizing / zoom persistence (NSUserDefaults) | ReaderPreviewProvider.swift:25–38, :108 |
 
 ## CONVENTIONS
@@ -17,13 +20,17 @@ Quick Look preview app-extension. macOS instantiates `ReaderPreviewProvider` via
 - Stale work directories are swept on open.
 - Only the previewed book is served through `ekbres://`; the extension is sandboxed, with no network use beyond `network.client` for local HTML.
 - Position is reported to `ReadingPositionStore` on scroll; zoom / sidebar width round-trip through NSUserDefaults.
+- Markdown preferences are read ONCE per preview and only when `isMarkdown(url)` is true: `ReaderPreferences.load()` returns `jsParse`/`theme` (defaults on any failure), `jsParse` decides rendered HTML vs raw source in the backend and gates the page's assets, and a `.system` theme is resolved against the appex's `effectiveAppearance` before `ReaderDocument.Options` is built. EPUB/MOBI keep `ReaderDocument.Options` defaults.
+- `ReaderSchemeHandler` serves `ekbres://assets/<bare filename>` from `Bundle.main`; every other host goes through the book's `ResourceSource`.
 
 ## ANTI-PATTERNS
 - Dropping `-Wl,-needed_framework,QuickLookUI` from `project.yml` (see root AGENTS.md) — the extension crashes in `EXConcreteExtensionContextVendor`.
 - Releasing the security scope after parsing — breaks lazy image reads.
 - Using `webView.pageZoom` for text size (see Reader/AGENTS.md).
 - Trusting `qlmanage` output — it reflects neither the user's view nor the real generator; Finder is the judge.
+- Adding `ReaderAssets/` back to this target's sources: the folder is excluded here on purpose and belongs only to `EBookQLMarkdownPreview.appex`.
 
 ## NOTES
-- `ReaderSchemeHandler` bridges `ResourceProvider` to `WKURLSchemeHandler`.
+- `ReaderSchemeHandler` bridges `ResourceProvider` to `WKURLSchemeHandler`, and the reserved `assets` host to `Bundle.main`.
 - The preview panel size is a fraction of the Quick Look panel, applied in `applyPreferredPanelSize`.
+- `ReaderPreferences` is the read half of the cross-sandbox settings channel; the unsandboxed host writes the file (`EBookQLApp/SettingsStore.swift`). No App Groups, no UserDefaults.

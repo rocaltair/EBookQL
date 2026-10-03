@@ -1,18 +1,23 @@
 # EBookQL
 
-Quick Look previews **and thumbnails** for EPUB, MOBI, AZW and AZW3 books on macOS —
-select a book in the Finder, press **Space**, read it.
+Quick Look previews **and thumbnails** for EPUB, MOBI, AZW and AZW3 books, and for
+Markdown, on macOS. Select a book or a note in the Finder, press **Space**, read it.
 
 ![screenshot](docs/screenshot.png)
 
-One reader UI over two parsers (an EPUB one and a libmobi-backed MOBI one), so all four
-formats look and behave the same: the same sidebar, the same controls, the same reading
-position, the same thumbnail card.
+One reader UI over three parsers (an EPUB one, a libmobi-backed MOBI one, and a
+JavaScriptCore + `marked` Markdown one), so every format looks and behaves the same: the
+same sidebar, the same controls, the same reading position, the same thumbnail card.
+Markdown brings its own math and diagrams, rendered entirely offline.
 
 ## What you get
 
 - **Quick Look preview** — a full window in the Finder's Quick Look panel: the book's own
   text in a readable column, its images, and a covering page instead of a blank panel.
+- **Markdown, with math and diagrams** — `.md`, `.markdown` and `.mdx` render as GFM.
+  Inline and display LaTeX become real math via KaTeX, fenced `mermaid` blocks become
+  diagrams, and heading ids keep `[text](#heading)` links working. Both libraries are
+  bundled, so nothing is fetched from the network.
 - **Table of contents** — a folding tree in the sidebar. The chapter you are reading is
   highlighted as you scroll, the part it lives in unfolds itself, and the sidebar follows
   so the highlighted entry stays in view. Click to jump; the book's own internal links work
@@ -28,22 +33,26 @@ position, the same thumbnail card.
 - **Resizable sidebar** — drag the divider; the width is remembered.
 - **Thumbnails** — the Finder shows a card built from the book's own title, author and
   opening lines rather than a generic icon.
+- **A configuration window** — the app itself is a small settings window: switch the two
+  Markdown extensions on or off, choose whether Markdown is rendered with JavaScript or
+  shown as plain source, and pick System, Light or Dark.
 - **Large books stay responsive** — the book is one page, so sections below the fold are
   not laid out until they are needed.
-- **No network** — the extensions are sandboxed, and the custom scheme that feeds images
-  to the preview only ever serves the book being previewed.
+- **No network** — the extensions are sandboxed, and the custom scheme only ever serves the
+  book being previewed plus the extension's own bundled rendering assets. Nothing is
+  fetched from the network.
 
 ## Install
 
 ### From the disk image
 
-1. Open `EBookQL-0.1.0.dmg`.
+1. Open `EBookQL-0.2.0.dmg`.
 2. Drag **EBookQL** onto the **Applications** folder in that window.
-3. **Open EBookQL once.** That is what registers its two extensions — copying the app by
-   itself registers nothing. The window reports whether they are live, and re-registers
-   them on request.
+3. **Open EBookQL once.** That is what registers its four extensions: copying the app by
+   itself registers nothing. The window reports whether they are live, carries the
+   Markdown settings, and re-registers everything on request.
 
-Then select a book in the Finder and press Space.
+Then select a book or a Markdown file in the Finder and press Space.
 
 If the window says an extension is *switched off*, turn it on in
 **System Settings ▸ General ▸ Login Items & Extensions ▸ Quick Look**, then reopen the
@@ -53,7 +62,7 @@ Finder. EBookQL will not switch an extension back on behind your back.
 
 ```sh
 brew install xcodegen
-./install.sh              # build, install into /Applications, register both extensions
+./install.sh              # build, install into /Applications, register all four extensions
 ./install.sh status       # what is registered, and how the book UTIs resolve
 ./install.sh history      # the reading-position database
 ./install.sh uninstall
@@ -69,10 +78,29 @@ script points `DEVELOPER_DIR` at Xcode itself.
 |---|---|---|
 | `.epub` | the project's own ZIP + OPF/NCX reader | zipped `.epub` |
 | `.mobi`, `.azw`, `.azw3` | [libmobi](https://github.com/bfabiszewski/libmobi), vendored | KF7 and KF8; images and the container's NCX table of contents are read from the file |
+| `.md`, `.markdown`, `.mdx` | JavaScriptCore + embedded [marked](https://github.com/markedjs/marked) | GFM; front matter supplies title/author; LaTeX math and mermaid diagrams render offline |
 
 The MOBI family has no system-declared UTI, so the app exports one; the extensions also
 declare the UTIs other readers export, because which declaration wins is not under the
-extension's control.
+extension's control. `.md` and `.markdown` use the system's own
+`net.daringfireball.markdown` type, and `.mdx` is EBookQL's own type conforming to it.
+
+## Markdown
+
+`.md`, `.markdown` and `.mdx` get the same reader as books. GitHub-flavored Markdown is
+parsed by an embedded copy of `marked`, and the sidebar is derived from the headings it
+generates, so `[text](#heading)` links keep working. Inline and display LaTeX (`$…$`,
+`$$…$$`, `\(…\)`, `\[…\]`) is typeset with KaTeX, and fenced `mermaid` blocks become
+diagrams. Both libraries are vendored and served through the extension's own scheme, so
+math and diagrams work with no network at all.
+
+The app window is where Markdown is configured: register the Markdown extensions on or off,
+render with JavaScript or show the raw source, and choose System, Light or Dark. The
+settings travel from the unsandboxed app into the sandboxed Markdown extension through a
+small JSON file in the extension's own container. Only the Markdown extension reads them.
+
+With JavaScript rendering off, a file is shown as escaped source instead, which is handy for
+inspecting the markup; math and diagrams then appear as their source text.
 
 ## Requirements
 
@@ -100,6 +128,9 @@ book's own cross-links (here 英文 / 中文) work as well.
 - **A downloaded copy is quarantined.** The app is ad-hoc signed and not notarized, so a
   copy that arrives over the network will not open until you right-click it and choose
   Open. A disk image handed over locally has no such flag.
+- **Markdown math and diagrams need JavaScript rendering.** Turn that setting off and you
+  get the escaped source instead. MDX `import` / `export` lines are dropped and JSX
+  components are not executed either way.
 - **Quick Look picks one extension per type.** If another reader also previews the same
   formats, disable it while testing EBookQL.
 
@@ -113,3 +144,8 @@ is linked: `README-EBookQL.md` there). Note that the vendored copy comes from th
 own MobiFile project rather than from a pristine upstream release. It is statically linked
 into the extensions, so the vendored sources are the copy you can rebuild and relink
 against. ZIPFoundation (MIT) is used for EPUB containers.
+
+Markdown parsing embeds **marked** (MIT). The Markdown preview extension also bundles
+**Mermaid** (`@mermaid-js/tiny` 12.1.0, MIT) and **KaTeX** 0.19.0 (MIT, with its fonts under
+the SIL OFL 1.1) under `EBookQLPreview/ReaderAssets/`; the licence texts are in that
+directory's `NOTICES.md`.

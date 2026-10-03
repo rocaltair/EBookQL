@@ -36,6 +36,28 @@ enum ReaderAssets {
             --current-bg: rgba(255, 255, 255, .16);
         }
     }
+    /* A markdown book may force a concrete scheme: the reader's Settings choice wins
+       over the system. Scoped to the data-theme attribute, which only a markdown page
+       sets, so an EPUB/MOBI page (no attribute) is untouched and keeps following the
+       media query above. Attribute selector outranks :root, so the forced palette wins. */
+    html[data-theme="dark"] {
+        color-scheme: dark;
+        --page-bg: #202022;
+        --text-color: #e8e8ea;
+        --toc-bg: #2b2b2e;
+        --toc-border: rgba(255, 255, 255, .16);
+        --hover-bg: rgba(255, 255, 255, .08);
+        --current-bg: rgba(255, 255, 255, .16);
+    }
+    html[data-theme="light"] {
+        color-scheme: light;
+        --page-bg: #f7f7f8;
+        --text-color: #1c1c1e;
+        --toc-bg: #ececef;
+        --toc-border: rgba(0, 0, 0, .14);
+        --hover-bg: rgba(0, 0, 0, .07);
+        --current-bg: rgba(0, 0, 0, .13);
+    }
     html, body { margin: 0; background: var(--page-bg); color: var(--text-color); }
     body { font: -apple-system-body; line-height: 1.6; }
     /* Layout is what costs: a 402-chapter book is a 12 MB single page and a document
@@ -175,6 +197,212 @@ enum ReaderAssets {
     }
     code, pre { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
     pre, table { max-width: 100%; overflow-x: auto; }
+
+    /* Markdown-derived content: TeX and Mermaid diagrams, rendered in place by the
+       reader bootstrap from the vendored assets. Until (or unless) that succeeds the
+       raw markup stays on screen, so the unrendered forms keep a readable look. */
+    .math-block { display: block; text-align: center; overflow-x: auto; margin: 1em 0; }
+    .math-inline { white-space: nowrap; }
+    .mermaid { text-align: center; margin: 1em 0; }
+    /* Mermaid marks an element it has replaced with data-processed; only the source
+       that is still waiting to render gets the code-block treatment. */
+    pre.mermaid:not([data-processed]) {
+        text-align: start; padding: .6em .8em; border-radius: .4em; overflow-x: auto;
+        background: var(--hover-bg); font-size: .92em; opacity: .75;
+    }
+
+    /* GitHub-flavored Markdown skin. Scoped to html[data-format="markdown"], which
+       ReaderDocument emits for a markdown book only, so no rule below can reach an
+       EPUB/MOBI page. Fonts apply to #content alone; the chrome is left as it was. */
+    html[data-format="markdown"] {
+        --gh-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+        --gh-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+        background: var(--gh-canvas);
+        color: var(--gh-text);
+    }
+    html[data-format="markdown"][data-theme="light"] {
+        color-scheme: light;
+        --gh-canvas: #ffffff;
+        --gh-subtle: #f6f8fa;
+        --gh-border: #d0d7de;
+        --gh-text: #1f2328;
+        --gh-muted: #57606a;
+        --gh-accent: #0969da;
+        --gh-code-bg: rgba(175, 184, 193, .2);
+        --page-bg: #ffffff;
+        --text-color: #1f2328;
+    }
+    html[data-format="markdown"][data-theme="dark"] {
+        color-scheme: dark;
+        --gh-canvas: #0d1117;
+        --gh-subtle: #161b22;
+        --gh-border: #30363d;
+        --gh-text: #e6edf3;
+        --gh-muted: #8b949e;
+        --gh-accent: #2f81f7;
+        --gh-code-bg: rgba(110, 118, 129, .4);
+        --page-bg: #0d1117;
+        --text-color: #e6edf3;
+    }
+    html[data-format="markdown"] #content {
+        font-family: var(--gh-sans);
+        line-height: 1.5;
+    }
+    html[data-format="markdown"] #content p { margin: 0 0 16px; }
+    html[data-format="markdown"] #content .chapter > :first-child { margin-top: 0; }
+
+    /* Tables: collapsed hairlines, a header row like a heading, zebra body rows, and a
+       wide table scrolling inside its own box instead of stretching the page. */
+    html[data-format="markdown"] #content table {
+        display: block; width: max-content; max-width: 100%; overflow: auto;
+        border-collapse: collapse; border-spacing: 0; margin: 0 0 16px;
+    }
+    html[data-format="markdown"] #content table th,
+    html[data-format="markdown"] #content table td {
+        padding: 6px 13px; border: 1px solid var(--gh-border);
+    }
+    html[data-format="markdown"] #content table th {
+        font-weight: 600; background: var(--gh-subtle);
+    }
+    html[data-format="markdown"] #content table tr {
+        background: var(--gh-canvas); border-top: 1px solid var(--gh-border);
+    }
+    html[data-format="markdown"] #content table tr:nth-child(2n) { background: var(--gh-subtle); }
+
+    /* Code: a tinted, rounded block for pre, a small chip for inline code. */
+    html[data-format="markdown"] #content pre {
+        padding: 16px; overflow: auto; margin: 0 0 16px;
+        background: var(--gh-subtle); border-radius: 6px; font-size: 85%; line-height: 1.45;
+    }
+    html[data-format="markdown"] #content code {
+        font-family: var(--gh-mono); font-size: 85%;
+        background: var(--gh-code-bg); padding: .2em .4em; border-radius: 6px;
+    }
+    html[data-format="markdown"] #content pre code {
+        background: transparent; padding: 0; border-radius: 0; font-size: 100%; white-space: pre;
+    }
+
+    /* Headings: the h1/h2 hairline is the README tell. */
+    html[data-format="markdown"] #content h1,
+    html[data-format="markdown"] #content h2 {
+        padding-bottom: .3em; border-bottom: 1px solid var(--gh-border);
+    }
+    html[data-format="markdown"] #content h1,
+    html[data-format="markdown"] #content h2,
+    html[data-format="markdown"] #content h3,
+    html[data-format="markdown"] #content h4,
+    html[data-format="markdown"] #content h5,
+    html[data-format="markdown"] #content h6 {
+        margin: 24px 0 16px; font-weight: 600; line-height: 1.25;
+    }
+    html[data-format="markdown"] #content h1 { font-size: 2em; }
+    html[data-format="markdown"] #content h2 { font-size: 1.5em; }
+    html[data-format="markdown"] #content h3 { font-size: 1.25em; }
+    html[data-format="markdown"] #content h6 { color: var(--gh-muted); }
+
+    /* Links, quotes, rules, lists, task lists. */
+    html[data-format="markdown"] #content a { color: var(--gh-accent); text-decoration: underline; }
+    html[data-format="markdown"] #content blockquote {
+        padding: 0 1em; margin: 0 0 16px; color: var(--gh-muted); opacity: 1;
+        border-inline-start: .25em solid var(--gh-border);
+    }
+    html[data-format="markdown"] #content hr {
+        height: .25em; padding: 0; margin: 24px 0; border: 0; background: var(--gh-border);
+    }
+    html[data-format="markdown"] #content ul,
+    html[data-format="markdown"] #content ol { padding-inline-start: 2em; margin: 0 0 16px; }
+    html[data-format="markdown"] #content li + li { margin-top: .25em; }
+    html[data-format="markdown"] #content li > ul,
+    html[data-format="markdown"] #content li > ol { margin-top: .25em; margin-bottom: 0; }
+    /* marked emits a bare checkbox inside the <li>, no class, so the item is matched
+       structurally and the box is pulled back over the list indent. */
+    html[data-format="markdown"] #content li:has(input[type="checkbox"]) { list-style: none; }
+    html[data-format="markdown"] #content li:has(input[type="checkbox"]) > p { margin-top: 0; margin-bottom: 0; }
+    html[data-format="markdown"] #content li input[type="checkbox"] {
+        margin: 0 .2em .25em -1.6em; vertical-align: middle;
+    }
+    html[data-format="markdown"] #content img { max-width: 100%; }
+    html[data-format="markdown"] #content del { text-decoration: line-through; }
+
+    /* Copy button on code blocks: a markdown-scoped enhancer adds one <button>
+       per eligible <pre>, so only the block that contains it is made a
+       positioning context. The button hides until the block is hovered or the
+       button is focused/keyboard-copied, and the extra top padding keeps the
+       first code line clear of it. */
+    html[data-format="markdown"] #content pre.ekb-has-copy {
+        position: relative; padding-top: 34px;
+    }
+    html[data-format="markdown"] #content .ekb-copy {
+        position: absolute; top: 6px; right: 6px;
+        padding: 2px 8px; border: 1px solid var(--gh-border); border-radius: 6px;
+        background: var(--gh-subtle); color: var(--gh-text);
+        font-family: var(--gh-sans); font-size: 12px; line-height: 1.4;
+        cursor: pointer; opacity: 0; transition: opacity .12s ease;
+    }
+    html[data-format="markdown"] #content pre.ekb-has-copy:hover .ekb-copy,
+    html[data-format="markdown"] #content .ekb-copy:focus-visible,
+    html[data-format="markdown"] #content .ekb-copy[data-copied] { opacity: 1; }
+    html[data-format="markdown"] #content .ekb-copy:hover {
+        background: var(--gh-canvas); border-color: var(--gh-muted);
+    }
+    html[data-format="markdown"] #content .ekb-copy[data-copied] {
+        color: var(--gh-accent); border-color: var(--gh-accent);
+    }
+    /* The same button on block math. Only the positioning context and the hover
+       reveal are math-specific; the look above is the shared .ekb-copy rule. Inline
+       math is clicked directly (cursor: copy) and flashes a brief highlight. */
+    html[data-format="markdown"] #content .math-block.ekb-math-copy { position: relative; }
+    html[data-format="markdown"] #content .math-block.ekb-math-copy .ekb-copy {
+        position: absolute; top: 6px; right: 6px; opacity: 0;
+    }
+    html[data-format="markdown"] #content .math-block.ekb-math-copy:hover .ekb-copy,
+    html[data-format="markdown"] #content .math-block.ekb-math-copy .ekb-copy:focus-visible,
+    html[data-format="markdown"] #content .math-block.ekb-math-copy .ekb-copy[data-copied] { opacity: 1; }
+    html[data-format="markdown"] #content .math-inline.ekb-math-copy { cursor: copy; }
+    html[data-format="markdown"] #content .math-inline.ekb-math-copy[data-ekb-copied] {
+        background: var(--gh-code-bg); border-radius: 3px;
+    }
+
+    /* Line numbers on markdown code blocks, opt-in via the page's `lineNumbers`
+       state (the markdown enhancer adds .ekb-lines only then). Each wrapped line
+       is a block whose number is a ::before pseudo-element in a reserved left grid
+       column (2.4em, plus a .75em gap - the old inline geometry). The gutter is a
+       box of its own, not padding: WebKit stretches a multi-line selection across
+       the text box, and padding would be painted over on the lines between the
+       endpoints. Being pseudo content, the number is invisible to textContent and
+       the Copy button still yields the original source byte-for-byte. An interior
+       blank line is :empty, so it is unnumbered but still occupies one line via
+       min-height. */
+    html[data-format="markdown"] #content pre.ekb-lines { counter-reset: ekb-line; }
+    html[data-format="markdown"] #content pre.ekb-lines code { display: block; }
+    html[data-format="markdown"] #content pre.ekb-lines .ekb-line {
+        display: grid; grid-template-columns: 2.4em 1fr; column-gap: .75em;
+    }
+    html[data-format="markdown"] #content pre.ekb-lines .ekb-line:empty { min-height: 1lh; }
+    html[data-format="markdown"] #content pre.ekb-lines .ekb-line::before {
+        counter-increment: ekb-line;
+        content: counter(ekb-line);
+        grid-column: 1; grid-row: 1; box-sizing: border-box;
+        text-align: right; color: var(--gh-muted); font-family: var(--gh-mono);
+        -webkit-user-select: none; user-select: none;
+    }
+    html[data-format="markdown"] #content pre.ekb-lines .ekb-line:empty::before {
+        counter-increment: none; content: none;
+    }
+
+    /* Collapsible <details>, the GitHub way: raw HTML passed through by marked.
+       Only rhythm, weight and the affordance cursor are set; the native
+       disclosure marker is left alone. */
+    html[data-format="markdown"] #content details { margin: 16px 0; }
+    html[data-format="markdown"] #content summary {
+        cursor: pointer; font-weight: 600; margin-bottom: 0;
+    }
+    html[data-format="markdown"] #content details[open] > summary { margin-bottom: 8px; }
+
+    /* End of the GitHub-flavored Markdown skin: every selector above is gated on
+       html[data-format="markdown"], an attribute ReaderDocument emits only for a
+       markdown book (alongside data-theme). An EPUB/MOBI page carries neither
+       attribute, matches none of these rules, and renders exactly as it did before. */
     """
 
     /// Injected into every page. Talks to the extension over three script messages.
@@ -679,6 +907,243 @@ enum ReaderAssets {
             }
             armed = true;
         }, 3000);
+
+        /* ---------- clipboard ---------- */
+
+        /* The one clipboard writer, shared by the code-block buttons and the math
+           copy affordances. The extension's ekbCopy handler is preferred, then the
+           async clipboard API, then a hidden textarea using execCommand. Defined
+           once at IIFE scope so the math and code enhancers cannot drift apart. */
+        var copyBridge = window.webkit && window.webkit.messageHandlers
+            && window.webkit.messageHandlers.ekbCopy;
+
+        function copyText(text) {
+            if (copyBridge) {
+                try { copyBridge.postMessage(text); return true; } catch (error) {}
+            }
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                try { navigator.clipboard.writeText(text); return true; } catch (error) {}
+            }
+            try {
+                var area = document.createElement('textarea');
+                area.value = text;
+                area.setAttribute('readonly', '');
+                area.style.position = 'fixed';
+                area.style.top = '-1000px';
+                area.style.opacity = '0';
+                document.body.appendChild(area);
+                area.select();
+                document.execCommand('copy');
+                document.body.removeChild(area);
+                return true;
+            } catch (error) {
+                return false;
+            }
+        }
+
+        /* ---------- math + diagrams ---------- */
+
+        /* Markdown-derived books carry TeX in .math-inline/.math-block and Mermaid
+           diagrams in pre.mermaid; neither appears in an EPUB/MOBI page, so the two
+           selector guards below make this a no-op for the formats that predate it.
+           Both renderers are vendored and served from the appex bundle over
+           ekbres://assets/ - never the network. A missing or failing asset leaves the
+           source text visible; the page is never blanked and nothing here throws.
+
+           When the reader turned JavaScript parsing off, the backend already returned
+           the document's raw source and none of this should run: the hard `jsParse`
+           guard below is what keeps the 2.8 MB mermaid/KaTeX bundle from ever being
+           fetched for a page we are not going to enhance. */
+        var ASSET_BASE = 'ekbres://assets/';
+        var jsParse = state.jsParse !== false;
+
+        function injectScript(src, onload) {
+            var script = document.createElement('script');
+            script.src = src;
+            script.onload = function () { try { onload(); } catch (error) {} };
+            script.onerror = function () {};
+            document.head.appendChild(script);
+        }
+
+        if (jsParse && document.querySelector('.mermaid') && !window.mermaid) {
+            injectScript(ASSET_BASE + 'mermaid.min.js', function () {
+                try {
+                    window.mermaid.initialize({
+                        startOnLoad: false,
+                        securityLevel: 'strict',
+                        theme: state.theme === 'dark' ? 'dark' : 'default'
+                    });
+                    var running = window.mermaid.run({ querySelector: '.mermaid' });
+                    if (running && typeof running.catch === 'function') { running.catch(function () {}); }
+                } catch (error) {}
+            });
+        }
+
+        if (jsParse && document.querySelector('.math-inline, .math-block') && !window.katex) {
+            var katexStyle = document.createElement('link');
+            katexStyle.rel = 'stylesheet';
+            katexStyle.href = ASSET_BASE + 'katex.min.css';
+            document.head.appendChild(katexStyle);
+
+            injectScript(ASSET_BASE + 'katex.min.js', function () {
+                var elements = document.querySelectorAll('.math-inline, .math-block');
+                for (var i = 0; i < elements.length; i++) {
+                    var element = elements[i];
+                    if (element.getAttribute('data-ekb-math') === 'done') { continue; }
+
+                    /* Stashed before the render replaces the children, and kept even
+                       when the render throws, so the original TeX stays copyable. */
+                    var tex = element.textContent;
+                    element.setAttribute('data-ekb-tex', tex);
+
+                    try {
+                        window.katex.render(element.textContent, element, {
+                            displayMode: element.classList.contains('math-block'),
+                            throwOnError: false
+                        });
+                        element.setAttribute('data-ekb-math', 'done');
+                    } catch (error) {
+                        /* Leave the raw TeX in place rather than emptying the node. */
+                    }
+                }
+                enhanceMath();
+            });
+        }
+
+        /* Copy affordances for rendered math, on the same clipboard path as the
+           code blocks. The raw TeX is stashed in data-ekb-tex before katex replaces
+           the element's children. Block math gets the shared .ekb-copy button;
+           inline math is copied by clicking the formula itself, with a brief
+           data-ekb-copied highlight. Idempotent via .ekb-math-copy. */
+        function enhanceMath() {
+            if (document.documentElement.getAttribute('data-format') !== 'markdown') { return; }
+
+            var blocks = document.querySelectorAll('.math-block[data-ekb-tex]:not(.ekb-math-copy)');
+            for (var i = 0; i < blocks.length; i++) {
+                var block = blocks[i];
+                block.classList.add('ekb-math-copy');
+                var button = document.createElement('button');
+                button.type = 'button';
+                button.className = 'ekb-copy';
+                button.textContent = 'Copy';
+                (function (owner, control) {
+                    control.addEventListener('click', function () {
+                        copyText(owner.getAttribute('data-ekb-tex'));
+                        control.textContent = 'Copied';
+                        control.setAttribute('data-copied', '');
+                        setTimeout(function () {
+                            control.textContent = 'Copy';
+                            control.removeAttribute('data-copied');
+                        }, 1200);
+                    });
+                })(block, button);
+                block.appendChild(button);
+            }
+
+            var inlines = document.querySelectorAll('.math-inline[data-ekb-tex]:not(.ekb-math-copy)');
+            for (var j = 0; j < inlines.length; j++) {
+                var inline = inlines[j];
+                inline.classList.add('ekb-math-copy');
+                inline.setAttribute('title', 'Copy LaTeX');
+                (function (owner) {
+                    owner.addEventListener('click', function () {
+                        copyText(owner.getAttribute('data-ekb-tex'));
+                        owner.setAttribute('data-ekb-copied', '');
+                        setTimeout(function () {
+                            owner.removeAttribute('data-ekb-copied');
+                        }, 1200);
+                    });
+                })(inline);
+            }
+        }
+
+        /* ---------- copy buttons (markdown only) ---------- */
+
+        /* GitHub-style copy button on fenced code blocks. The html[data-format]
+           gate keeps this off an EPUB/MOBI page: only a markdown page carries
+           the attribute, and there none of these selectors can run.
+           Deliberately independent of jsParse, because a raw-source page
+           (pre.markdown-source) is exactly where copying matters most. */
+        if (document.documentElement.getAttribute('data-format') === 'markdown') {
+            /* Off unless the reader turned it on. The numbers themselves are ::before
+               pseudo content (see the stylesheet), never text nodes; the copy payload
+               is captured before the wrapping below, so it stays the original source. */
+            var wantsLineNumbers = state.lineNumbers === true;
+
+            /* One block span per line; each span holds only its own line text and no
+               '\\n', because their block layout supplies the breaks and the stylesheet
+               keeps the counter in a left gutter outside the selectable text run. A
+               trailing newline's empty piece is skipped so no spurious blank numbered
+               row appears; an interior blank line stays as an :empty span, which the
+               stylesheet keeps one line tall and unnumbered. */
+            function applyLineNumbers(target) {
+                var pieces = target.textContent.split('\\n');
+                if (pieces.length > 1 && pieces[pieces.length - 1] === '') { pieces.pop(); }
+                var fragment = document.createDocumentFragment();
+                for (var i = 0; i < pieces.length; i++) {
+                    var line = document.createElement('span');
+                    line.className = 'ekb-line';
+                    line.textContent = pieces[i];
+                    fragment.appendChild(line);
+                }
+                while (target.firstChild) { target.removeChild(target.firstChild); }
+                target.appendChild(fragment);
+            }
+
+            function enhanceCodeBlocks() {
+                var blocks = content.querySelectorAll('pre');
+                for (var i = 0; i < blocks.length; i++) {
+                    var pre = blocks[i];
+                    if (pre.classList.contains('mermaid')) { continue; }
+                    if (pre.closest && pre.closest('.math-block')) { continue; }
+                    if (pre.classList.contains('ekb-has-copy')) { continue; }
+                    var code = pre.querySelector('code');
+                    if (!code && !pre.classList.contains('markdown-source')) { continue; }
+
+                    /* Captured before the button is appended, so the button's own
+                       label is never part of a raw-source block's textContent. */
+                    var text = code ? code.textContent : pre.textContent;
+
+                    /* Line numbers wrap the line's text in block spans; the captured
+                       payload above is already the original source, so copy is
+                       unaffected by the wrapping either way. */
+                    if (wantsLineNumbers && !pre.classList.contains('ekb-lines')) {
+                        applyLineNumbers(code || pre);
+                        pre.classList.add('ekb-lines');
+                    }
+
+                    pre.classList.add('ekb-has-copy');
+                    var button = document.createElement('button');
+                    button.type = 'button';
+                    button.className = 'ekb-copy';
+                    button.textContent = 'Copy';
+
+                    (function (owner, control, payload) {
+                        control.addEventListener('click', function () {
+                            copyText(payload);
+                            control.textContent = 'Copied';
+                            control.setAttribute('data-copied', '');
+                            setTimeout(function () {
+                                control.textContent = 'Copy';
+                                control.removeAttribute('data-copied');
+                            }, 1200);
+                        });
+                    })(pre, button, text);
+
+                    pre.appendChild(button);
+                }
+            }
+
+            if (document.readyState === 'loading') {
+                document.addEventListener('DOMContentLoaded', enhanceCodeBlocks);
+            } else {
+                enhanceCodeBlocks();
+            }
+
+            /* Covers math whose katex was already present when this script ran (the
+               injection gate above skipped, so its onload never fires). */
+            enhanceMath();
+        }
     })();
     """
 }

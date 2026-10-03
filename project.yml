@@ -23,8 +23,8 @@ settings:
     CLANG_ENABLE_MODULES: YES
     CLANG_ENABLE_OBJC_ARC: YES
     SWIFT_VERSION: "5.0"
-    MARKETING_VERSION: "0.1.1"
-    CURRENT_PROJECT_VERSION: "2"
+    MARKETING_VERSION: "0.2.0"
+    CURRENT_PROJECT_VERSION: "3"
     GENERATE_INFOPLIST_FILE: NO
     DEAD_CODE_STRIPPING: YES
     # Release builds must not carry the debugging entitlement ("get-task-allow"):
@@ -50,6 +50,14 @@ schemes:
     build:
       targets:
         EBookQLThumbnail: all
+  EBookQLMarkdownPreview:
+    build:
+      targets:
+        EBookQLMarkdownPreview: all
+  EBookQLMarkdownThumbnail:
+    build:
+      targets:
+        EBookQLMarkdownThumbnail: all
 
 packages:
   ZIPFoundation:
@@ -71,8 +79,10 @@ targets:
     platform: macOS
     sources:
       - path: EBookQLKit
-        # Found through HEADER_SEARCH_PATHS instead (see below), not compiled.
-        excludes: ["Vendor/libmobi/module.modulemap"]
+        # Found through HEADER_SEARCH_PATHS instead (see below), not compiled. The
+        # AGENTS.md files are documentation, never a payload (and several share the
+        # name, so a flat copy would collide).
+        excludes: ["Vendor/libmobi/module.modulemap", "**/AGENTS.md", "AGENTS.md"]
     settings:
       base:
         PRODUCT_NAME: EBookQLKit
@@ -110,13 +120,28 @@ targets:
         copy:
           destination: plugins
           subpath: ""
+      - target: EBookQLMarkdownPreview
+        embed: true
+        codeSign: true
+        copy:
+          destination: plugins
+          subpath: ""
+      - target: EBookQLMarkdownThumbnail
+        embed: true
+        codeSign: true
+        copy:
+          destination: plugins
+          subpath: ""
 
   EBookQLPreview:
     type: app-extension
     platform: macOS
     sources:
       - path: EBookQLPreview
-        excludes: ["Info.plist", "*.entitlements"]
+        # ReaderAssets (the vendored Mermaid/KaTeX) is excluded here: it now ships
+        # only in EBookQLMarkdownPreview, which forces it into the resources phase so
+        # the reader finds it at the appex bundle root by bare filename.
+        excludes: ["Info.plist", "*.entitlements", "ReaderAssets", "AGENTS.md"]
     settings:
       base:
         PRODUCT_NAME: EBookQLPreview
@@ -127,6 +152,8 @@ targets:
         OTHER_LDFLAGS:
           - "-framework"
           - "WebKit"
+          - "-framework"
+          - "JavaScriptCore"
           - "-framework"
           - "QuickLookUI"
           # The extension context class for com.apple.quicklook.preview lives in
@@ -155,7 +182,7 @@ targets:
     platform: macOS
     sources:
       - path: EBookQLThumbnail
-        excludes: ["Info.plist", "*.entitlements"]
+        excludes: ["Info.plist", "*.entitlements", "AGENTS.md"]
     settings:
       base:
         PRODUCT_NAME: EBookQLThumbnail
@@ -164,6 +191,73 @@ targets:
         CODE_SIGN_ENTITLEMENTS: EBookQLThumbnail/EBookQLThumbnail.entitlements
         ENABLE_HARDENED_RUNTIME: YES
         OTHER_LDFLAGS:
+          - "-framework"
+          - "JavaScriptCore"
+          - "-lxml2"
+          - "-lz"
+          - "-lsqlite3"
+        HEADER_SEARCH_PATHS:
+          - "$(SRCROOT)/EBookQLKit/Vendor/libmobi"
+    dependencies:
+      - target: EBookQLKit
+      - package: ZIPFoundation
+
+  # Markdown-only siblings of the two appexes above. Separating them lets the
+  # user enable/disable Markdown Quick Look independently of EPUB/MOBI (Quick Look
+  # falls back to the system text generator when these are off).
+  EBookQLMarkdownPreview:
+    type: app-extension
+    platform: macOS
+    sources:
+      - path: EBookQLPreview
+        excludes: ["Info.plist", "*.entitlements", "ReaderAssets", "AGENTS.md"]
+      - path: EBookQLPreview/ReaderAssets
+        buildPhase: resources
+        # NOTICES.md is a payload (licence notices); its sibling AGENTS.md is not.
+        excludes: ["AGENTS.md"]
+        # Created by the asset task; tolerate it being absent so generation never
+        # fails on a partially provisioned checkout.
+        optional: true
+    settings:
+      base:
+        PRODUCT_NAME: EBookQLMarkdownPreview
+        PRODUCT_BUNDLE_IDENTIFIER: com.rocaltair.EBookQL.MarkdownPreview
+        INFOPLIST_FILE: EBookQLMarkdownPreview/Info.plist
+        CODE_SIGN_ENTITLEMENTS: EBookQLMarkdownPreview/EBookQLMarkdownPreview.entitlements
+        ENABLE_HARDENED_RUNTIME: YES
+        OTHER_LDFLAGS:
+          - "-framework"
+          - "WebKit"
+          - "-framework"
+          - "JavaScriptCore"
+          - "-framework"
+          - "QuickLookUI"
+          - "-Wl,-needed_framework,QuickLookUI"
+          - "-lxml2"
+          - "-lz"
+          - "-lsqlite3"
+        HEADER_SEARCH_PATHS:
+          - "$(SRCROOT)/EBookQLKit/Vendor/libmobi"
+    dependencies:
+      - target: EBookQLKit
+      - package: ZIPFoundation
+
+  EBookQLMarkdownThumbnail:
+    type: app-extension
+    platform: macOS
+    sources:
+      - path: EBookQLThumbnail
+        excludes: ["Info.plist", "*.entitlements", "AGENTS.md"]
+    settings:
+      base:
+        PRODUCT_NAME: EBookQLMarkdownThumbnail
+        PRODUCT_BUNDLE_IDENTIFIER: com.rocaltair.EBookQL.MarkdownThumbnail
+        INFOPLIST_FILE: EBookQLMarkdownThumbnail/Info.plist
+        CODE_SIGN_ENTITLEMENTS: EBookQLMarkdownThumbnail/EBookQLMarkdownThumbnail.entitlements
+        ENABLE_HARDENED_RUNTIME: YES
+        OTHER_LDFLAGS:
+          - "-framework"
+          - "JavaScriptCore"
           - "-lxml2"
           - "-lz"
           - "-lsqlite3"

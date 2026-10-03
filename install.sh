@@ -21,6 +21,8 @@ BUILT_APP="$DERIVED/Build/Products/$CONFIG/$APP_NAME.app"
 INSTALLED_APP="$INSTALL_DIR/$APP_NAME.app"
 PREVIEW_ID=com.rocaltair.EBookQL.Preview
 THUMBNAIL_ID=com.rocaltair.EBookQL.Thumbnail
+MARKDOWN_PREVIEW_ID=com.rocaltair.EBookQL.MarkdownPreview
+MARKDOWN_THUMBNAIL_ID=com.rocaltair.EBookQL.MarkdownThumbnail
 LSREGISTER=/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister
 
 # xcodebuild needs Xcode, not the command line tools; don't touch the system
@@ -49,7 +51,9 @@ build() {
 # in build/DerivedData can shadow the installed one. Drop those registrations.
 deregister_built_products() {
     for bundle in "$BUILT_APP/Contents/PlugIns/EBookQLPreview.appex" \
-                  "$BUILT_APP/Contents/PlugIns/EBookQLThumbnail.appex"; do
+                  "$BUILT_APP/Contents/PlugIns/EBookQLThumbnail.appex" \
+                  "$BUILT_APP/Contents/PlugIns/EBookQLMarkdownPreview.appex" \
+                  "$BUILT_APP/Contents/PlugIns/EBookQLMarkdownThumbnail.appex"; do
         [ -d "$bundle" ] && pluginkit -r "$bundle" >/dev/null 2>&1 || true
     done
     [ -d "$BUILT_APP" ] && "$LSREGISTER" -u "$BUILT_APP" >/dev/null 2>&1 || true
@@ -64,8 +68,12 @@ install_app() {
     "$LSREGISTER" -f "$INSTALLED_APP"
     pluginkit -a "$INSTALLED_APP/Contents/PlugIns/EBookQLPreview.appex"
     pluginkit -a "$INSTALLED_APP/Contents/PlugIns/EBookQLThumbnail.appex"
+    pluginkit -a "$INSTALLED_APP/Contents/PlugIns/EBookQLMarkdownPreview.appex"
+    pluginkit -a "$INSTALLED_APP/Contents/PlugIns/EBookQLMarkdownThumbnail.appex"
     pluginkit -e use -i "$PREVIEW_ID"
     pluginkit -e use -i "$THUMBNAIL_ID"
+    pluginkit -e use -i "$MARKDOWN_PREVIEW_ID"
+    pluginkit -e use -i "$MARKDOWN_THUMBNAIL_ID"
     echo "installed $INSTALLED_APP"
     status
 }
@@ -75,7 +83,7 @@ status() {
     pluginkit -m -v 2>/dev/null | grep -i "$APP_NAME" || echo "  (none)"
     echo "--- how the book extensions resolve ---"
     /usr/bin/swift -e 'import UniformTypeIdentifiers
-for ext in ["epub", "mobi", "azw", "azw3"] {
+for ext in ["epub", "mobi", "azw", "azw3", "md", "markdown", "mdx"] {
     print("  .\(ext) ->", UTType(filenameExtension: ext)?.identifier ?? "unknown")
 }' 2>/dev/null || true
 }
@@ -92,7 +100,9 @@ history() {
 
 uninstall_app() {
     for bundle in "$INSTALLED_APP/Contents/PlugIns/EBookQLPreview.appex" \
-                  "$INSTALLED_APP/Contents/PlugIns/EBookQLThumbnail.appex"; do
+                  "$INSTALLED_APP/Contents/PlugIns/EBookQLThumbnail.appex" \
+                  "$INSTALLED_APP/Contents/PlugIns/EBookQLMarkdownPreview.appex" \
+                  "$INSTALLED_APP/Contents/PlugIns/EBookQLMarkdownThumbnail.appex"; do
         [ -d "$bundle" ] && pluginkit -r "$bundle" || true
     done
     [ -d "$INSTALLED_APP" ] && "$LSREGISTER" -u "$INSTALLED_APP" || true

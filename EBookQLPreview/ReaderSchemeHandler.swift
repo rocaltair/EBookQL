@@ -33,11 +33,32 @@ final class ReaderSchemeHandler: NSObject, WKURLSchemeHandler {
             return
         }
         // A book's source is read on one serial queue, so a provider that opens its
-        // archive lazily needs no locking of its own.
+        // archive lazily needs no locking of its own. The reader's own vendored assets
+        // (Mermaid, KaTeX) use the reserved `assets` host and come from the appex
+        // bundle instead of the book; both routes share the same queue and finish.
         queue.async { [weak self] in
             guard let self else { return }
-            self.finish(task, self.source?.resource(at: requestURL.path))
+            if requestURL.host == "assets" {
+                self.finish(task, self.bundledAsset(at: requestURL))
+            } else {
+                self.finish(task, self.source?.resource(at: requestURL.path))
+            }
         }
+    }
+
+    /// A reader asset from the appex bundle root, e.g. `ekbres://assets/katex.min.js`.
+    /// The bare filename is the whole contract; `lastPathComponent` also keeps a
+    /// crafted path from reaching outside the bundle.
+    private func bundledAsset(at url: URL) -> (data: Data, mimeType: String?)? {
+        let name = url.lastPathComponent
+        guard !name.isEmpty else { return nil }
+        let ext = (name as NSString).pathExtension
+        let base = (name as NSString).deletingPathExtension
+        guard let fileURL = Bundle.main.url(forResource: base, withExtension: ext.isEmpty ? nil : ext),
+              let data = try? Data(contentsOf: fileURL) else {
+            return nil
+        }
+        return (data, Self.mimeType(for: name))
     }
 
     func webView(_ webView: WKWebView, stop task: WKURLSchemeTask) {

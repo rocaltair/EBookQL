@@ -5,11 +5,9 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>en</string>
 	<key>CFBundleDisplayName</key>
-	<string>EBookQL</string>
+	<string>EBookQL Markdown Preview</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
-	<key>CFBundleIconFile</key>
-	<string>AppIcon</string>
 	<key>CFBundleIdentifier</key>
 	<string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
 	<key>CFBundleInfoDictionaryVersion</key>
@@ -17,47 +15,33 @@
 	<key>CFBundleName</key>
 	<string>$(PRODUCT_NAME)</string>
 	<key>CFBundlePackageType</key>
-	<string>APPL</string>
+	<string>XPC!</string>
 	<key>CFBundleShortVersionString</key>
 	<string>$(MARKETING_VERSION)</string>
 	<key>CFBundleVersion</key>
 	<string>$(CURRENT_PROJECT_VERSION)</string>
-	<key>LSApplicationCategoryType</key>
-	<string>public.app-category.utilities</string>
 	<key>LSMinimumSystemVersion</key>
 	<string>$(MACOSX_DEPLOYMENT_TARGET)</string>
-	<key>NSHumanReadableCopyright</key>
-	<string>EBookQL — MIT Licence. MOBI parsing by libmobi (LGPL-3.0-or-later).</string>
-	<!-- The MOBI family has no system-declared UTI, so EBookQL declares one.
-	     .epub is covered by org.idpf.epub-container, which the system provides.
-	     .md and .markdown are covered by the system UTI net.daringfireball.markdown:
-	     EBookQL references it directly rather than declaring an own type. -->
-	<key>UTExportedTypeDeclarations</key>
-	<array>
+	<key>NSExtension</key>
+	<dict>
+		<key>NSExtensionAttributes</key>
 		<dict>
-			<key>UTTypeConformsTo</key>
+			<key>QLSupportedContentTypes</key>
 			<array>
-				<string>public.data</string>
+				<!-- Markdown: .md and .markdown are the system UTI
+				     net.daringfireball.markdown; .mdx is EBookQL's own
+				     com.rocaltair.mdx (imported below). -->
+				<string>net.daringfireball.markdown</string>
+				<string>com.rocaltair.mdx</string>
 			</array>
-			<key>UTTypeDescription</key>
-			<string>Mobi document</string>
-			<key>UTTypeIdentifier</key>
-			<string>com.rocaltair.mobi</string>
-			<key>UTTypeTagSpecification</key>
-			<dict>
-				<key>public.filename-extension</key>
-				<array>
-					<string>mobi</string>
-					<string>azw</string>
-					<string>azw3</string>
-				</array>
-				<key>public.mime-type</key>
-				<string>application/x-mobipocket-ebook</string>
-			</dict>
 		</dict>
-		<!-- MDX has no system-declared UTI either. Conforming to
-		     net.daringfireball.markdown (and public.plain-text) means macOS still
-		     treats .mdx as Markdown when EBookQL's extension is not chosen. -->
+		<key>NSExtensionPointIdentifier</key>
+		<string>com.apple.quicklook.preview</string>
+		<key>NSExtensionPrincipalClass</key>
+		<string>$(PRODUCT_MODULE_NAME).ReaderPreviewProvider</string>
+	</dict>
+	<key>UTImportedTypeDeclarations</key>
+	<array>
 		<dict>
 			<key>UTTypeConformsTo</key>
 			<array>

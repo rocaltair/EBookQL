@@ -34,6 +34,11 @@ public enum BookParseError: Error, LocalizedError {
 public protocol BookBackend {
     static var supportedExtensions: Set<String> { get }
     static func open(_ url: URL, workDirectory: URL) throws -> Book
+    /// Like `open(_:workDirectory:)`, with the preview's markdown-rendering choice.
+    /// Most formats ignore it; the markdown backend uses it to decide between the
+    /// rendered page and the document's raw source. The default implementation
+    /// ignores the flag and delegates to the two-argument form.
+    static func open(_ url: URL, workDirectory: URL, markdownRendering: Bool) throws -> Book
     /// A cheap parse for thumbnails: the title, the author and the opening text are
     /// all a card needs. Finder asks for thumbnails for a whole folder at once, so a
     /// backend that would otherwise read a 200 MB book into memory must not.
@@ -41,6 +46,10 @@ public protocol BookBackend {
 }
 
 public extension BookBackend {
+    static func open(_ url: URL, workDirectory: URL, markdownRendering: Bool) throws -> Book {
+        try open(url, workDirectory: workDirectory)
+    }
+
     static func openForThumbnail(_ url: URL, workDirectory: URL) throws -> Book {
         try open(url, workDirectory: workDirectory)
     }
@@ -48,11 +57,19 @@ public extension BookBackend {
 
 public enum BookOpener {
     /// Order matters only for formats that share an extension.
-    public static let backends: [BookBackend.Type] = [EPUBBackend.self, MOBIBackend.self]
+    public static let backends: [BookBackend.Type] = [EPUBBackend.self, MOBIBackend.self, MarkdownBackend.self]
 
     public static func backend(for url: URL) -> BookBackend.Type? {
         let ext = url.pathExtension.lowercased()
         return backends.first { $0.supportedExtensions.contains(ext) }
+    }
+
+    /// Parses `url` with the backend for its format, forwarding the preview's
+    /// markdown-rendering choice. Throws `unsupportedFormat` when no backend claims
+    /// the file, so callers get the same error the backends raise.
+    public static func open(_ url: URL, workDirectory: URL, markdownRendering: Bool) throws -> Book {
+        guard let backend = backend(for: url) else { throw BookParseError.unsupportedFormat }
+        return try backend.open(url, workDirectory: workDirectory, markdownRendering: markdownRendering)
     }
 }
 

@@ -42,6 +42,7 @@ final class ReaderPreviewProvider: NSViewController, QLPreviewingController, WKN
         static let position = "ekbPosition"
         static let zoom = "ekbZoom"
         static let ui = "ekbUI"
+        static let copy = "ekbCopy"
     }
 
     private let log = OSLog(subsystem: "com.rocaltair.EBookQL", category: "Preview")
@@ -65,7 +66,7 @@ final class ReaderPreviewProvider: NSViewController, QLPreviewingController, WKN
         configuration.setURLSchemeHandler(handler, forURLScheme: ReaderSchemeHandler.scheme)
         self.schemeHandler = handler
 
-        for name in [Message.position, Message.zoom, Message.ui] {
+        for name in [Message.position, Message.zoom, Message.ui, Message.copy] {
             configuration.userContentController.add(self, name: name)
         }
 
@@ -160,11 +161,19 @@ final class ReaderPreviewProvider: NSViewController, QLPreviewingController, WKN
         // Stop Finder's spinner promptly; the page fills in after.
         completionHandler(nil)
 
+        // The markdown preferences are read once and shared by the parse and the page:
+        // they decide whether the backend renders the markup and whether the page may
+        // fetch its math/diagram assets. Every other format keeps the defaults.
+        let preferences = Self.isMarkdown(url) ? ReaderPreferences.load() : nil
+
         let options = ReaderDocument.Options(
             readingPosition: savedPosition,
             sidebarWidth: UserDefaults.standard.object(forKey: Self.sidebarWidthKey) as? Int,
             zoom: Double(zoom),
-            tocTitle: ReaderDocument.localizedTOCTitle()
+            tocTitle: ReaderDocument.localizedTOCTitle(),
+            theme: preferences.map { Self.resolvedTheme($0.theme) } ?? .system,
+            markdownRendering: preferences?.jsParse ?? true,
+            showLineNumbers: preferences?.showLineNumbers ?? false
         )
 
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
@@ -224,7 +233,12 @@ final class ReaderPreviewProvider: NSViewController, QLPreviewingController, WKN
                             resources: nil, sections: 0, title: nil, author: nil)
         }
         let t0 = Date()
-        let book = try backend.open(url, workDirectory: workDirectory)
+        // Markdown carries the reader's rendering choice into the parse (it decides
+        // between the rendered page and the raw source); every other backend keeps the
+        // two-argument call it has always used.
+        let book = Self.isMarkdown(url)
+            ? try BookOpener.open(url, workDirectory: workDirectory, markdownRendering: options.markdownRendering)
+            : try backend.open(url, workDirectory: workDirectory)
         let t1 = Date()
         let page = try ReaderDocument.build(book, options: options)
         let t2 = Date()
@@ -235,6 +249,21 @@ final class ReaderPreviewProvider: NSViewController, QLPreviewingController, WKN
                         sections: book.sections.count,
                         title: book.metadata.title,
                         author: book.metadata.author)
+    }
+
+    /// The markdown extensions, matched on the URL exactly as `BookOpener` picks its
+    /// backend, so the parse and the page options agree on one decision.
+    private static func isMarkdown(_ url: URL) -> Bool {
+        MarkdownBackend.supportedExtensions.contains(url.pathExtension.lowercased())
+    }
+
+    /// `.system` becomes a concrete scheme from the appex's own appearance, because the
+    /// page cannot see the system's choice and a forced scheme must beat
+    /// `prefers-color-scheme`. Light when AppKit cannot tell.
+    private static func resolvedTheme(_ theme: MarkdownTheme) -> MarkdownTheme {
+        guard theme == .system else { return theme }
+        let match = NSApp?.effectiveAppearance.bestMatch(from: [.aqua, .darkAqua])
+        return match == .darkAqua ? .dark : .light
     }
 
     private static let renderLog = OSLog(subsystem: "com.rocaltair.EBookQL", category: "Render")
@@ -253,6 +282,11 @@ final class ReaderPreviewProvider: NSViewController, QLPreviewingController, WKN
     // MARK: - Script messages
 
     func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
+        // Copy is the one message that carries a bare string rather than a dictionary.
+        if message.name == Message.copy {
+            handleCopy(message.body)
+            return
+        }
         guard let body = message.body as? [String: Any] else { return }
         switch message.name {
         case Message.position: handlePosition(body)
@@ -260,6 +294,14 @@ final class ReaderPreviewProvider: NSViewController, QLPreviewingController, WKN
         case Message.ui: handleUI(body)
         default: break
         }
+    }
+
+    private func handleCopy(_ body: Any) {
+        guard let text = body as? String else { return }
+        let pasteboard = NSPasteboard.general
+        pasteboard.clearContents()
+        pasteboard.setString(text, forType: .string)
+        os_log("copy %{public}d chars to pasteboard", log: log, type: .debug, text.count)
     }
 
     private func handlePosition(_ body: [String: Any]) {

@@ -2,12 +2,12 @@
 //  ExtensionRegistration.swift
 //  EBookQL
 //
-//  Registers the two Quick Look extensions with the system, and reports what the system
-//  actually thinks of them.
+//  Registers the Quick Look and Markdown extensions with the system, and reports what the
+//  system actually thinks of them.
 //
 //  Dragging the app into /Applications and opening it once is normally enough: measured on
-//  this machine, the copy alone registers nothing, and the first launch registers both
-//  extensions and leaves them enabled. This file exists for the cases where that is not
+//  this machine, the copy alone registers nothing, and the first launch registers them all
+//  and leaves them enabled. This file exists for the cases where that is not
 //  enough - an older copy elsewhere winning the registration, or an extension the user has
 //  switched off - and so the window can show the real state instead of describing it.
 //
@@ -18,6 +18,10 @@ import Foundation
 enum ExtensionRegistration {
     static let previewID = "com.rocaltair.EBookQL.Preview"
     static let thumbnailID = "com.rocaltair.EBookQL.Thumbnail"
+    static let markdownPreviewID = "com.rocaltair.EBookQL.MarkdownPreview"
+    static let markdownThumbnailID = "com.rocaltair.EBookQL.MarkdownThumbnail"
+
+    private static let allIDs = [previewID, thumbnailID, markdownPreviewID, markdownThumbnailID]
 
     private static let pluginkit = "/usr/bin/pluginkit"
     private static let lsregister =
@@ -43,13 +47,17 @@ enum ExtensionRegistration {
         }
     }
 
-    /// The two extensions as the system currently has them, in display order.
+    /// The extensions as the system currently has them, in display order.
     static func survey() -> [Extension] {
         let listed = pluginkitListing()
         return [Extension(id: previewID, title: "Quick Look preview",
                           path: listed[previewID]?.path, enabled: listed[previewID]?.enabled ?? false),
                 Extension(id: thumbnailID, title: "Finder thumbnails",
-                          path: listed[thumbnailID]?.path, enabled: listed[thumbnailID]?.enabled ?? false)]
+                          path: listed[thumbnailID]?.path, enabled: listed[thumbnailID]?.enabled ?? false),
+                Extension(id: markdownPreviewID, title: "Markdown Preview",
+                          path: listed[markdownPreviewID]?.path, enabled: listed[markdownPreviewID]?.enabled ?? false),
+                Extension(id: markdownThumbnailID, title: "Markdown Thumbnail",
+                          path: listed[markdownThumbnailID]?.path, enabled: listed[markdownThumbnailID]?.enabled ?? false)]
     }
 
     /// Ask the system to take this copy of the app, then make sure it is switched on -
@@ -61,8 +69,33 @@ enum ExtensionRegistration {
         for appex in appexPaths() {
             run(pluginkit, ["-a", appex])
         }
-        for id in [previewID, thumbnailID] where pluginkitListing()[id] == nil {
+        for id in allIDs where pluginkitListing()[id] == nil {
             run(pluginkit, ["-e", "use", "-i", id])
+        }
+    }
+
+    /// True only when both markdown extensions are registered and switched on.
+    static func markdownEnabled() -> Bool {
+        let listed = pluginkitListing()
+        return listed[markdownPreviewID]?.enabled == true
+            && listed[markdownThumbnailID]?.enabled == true
+    }
+
+    /// Switch both markdown extensions on or off. Turning one on also registers its
+    /// appex first when the system has never seen it, but a deliberate switch-off is
+    /// never overridden.
+    static func setMarkdownEnabled(_ enabled: Bool) {
+        let listed = pluginkitListing()
+        for (id, appexName) in [(markdownPreviewID, "EBookQLMarkdownPreview.appex"),
+                                (markdownThumbnailID, "EBookQLMarkdownThumbnail.appex")] {
+            if enabled {
+                if listed[id] == nil, let appex = appexPath(named: appexName) {
+                    run(pluginkit, ["-a", appex])
+                }
+                run(pluginkit, ["-e", "use", "-i", id])
+            } else {
+                run(pluginkit, ["-e", "ignore", "-i", id])
+            }
         }
     }
 
@@ -76,9 +109,14 @@ enum ExtensionRegistration {
 
     private static func appexPaths() -> [String] {
         guard let plugins = Bundle.main.builtInPlugInsURL else { return [] }
-        return ["EBookQLPreview.appex", "EBookQLThumbnail.appex"]
+        return ["EBookQLPreview.appex", "EBookQLThumbnail.appex",
+                "EBookQLMarkdownPreview.appex", "EBookQLMarkdownThumbnail.appex"]
             .map { plugins.appendingPathComponent($0).path }
             .filter { FileManager.default.fileExists(atPath: $0) }
+    }
+
+    private static func appexPath(named name: String) -> String? {
+        appexPaths().first { $0.hasSuffix("/" + name) }
     }
 
     /// `pluginkit -m -v` lists one line per registered copy:
@@ -96,7 +134,7 @@ enum ExtensionRegistration {
             let enabled = head.hasPrefix("+") || head.trimmingCharacters(in: .whitespaces).hasPrefix("+")
             let id = head[head.startIndex..<open]
                 .trimmingCharacters(in: CharacterSet(charactersIn: "+- \t"))
-            guard id == previewID || id == thumbnailID else { continue }
+            guard allIDs.contains(id) else { continue }
             let path = fields[fields.count - 1].trimmingCharacters(in: .whitespaces)
             // A later line for the same id is a second copy; keep the enabled one, since
             // that is the one Quick Look will actually use.

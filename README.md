@@ -18,10 +18,11 @@ Markdown brings its own math and diagrams, rendered entirely offline.
   Inline and display LaTeX become real math via KaTeX, fenced `mermaid` blocks become
   diagrams, and heading ids keep `[text](#heading)` links working. Both libraries are
   bundled, so nothing is fetched from the network.
-- **Table of contents** — a folding tree in the sidebar. The chapter you are reading is
-  highlighted as you scroll, the part it lives in unfolds itself, and the sidebar follows
-  so the highlighted entry stays in view. Click to jump; the book's own internal links work
-  too.
+- **Table of contents** — a folding tree in the sidebar, which opens as a plain outline. The
+  entry you are reading is highlighted as you scroll, its branch unfolds itself so the
+  highlight is never hidden, and the sidebar follows to keep it in view. The branch you have
+  left closes behind you — unless you switch that off with the toggle beside *fold all*, and
+  then the tree only ever opens. Click to jump; the book's own internal links work too.
 - **Picks the richer table of contents** — some books declare a good one in their container
   and some only mark up headings, so both are read and the one with more entries wins.
 - **Reading position** — the panel comes back to where you stopped, per book, in a small
@@ -30,17 +31,25 @@ Markdown brings its own math and diagrams, rendered entirely offline.
   the panel. Holding a button keeps stepping, because Quick Look opens the file in its
   default app on a double-click anywhere in the panel, so two quick clicks are not an
   option. Only the book's text scales: the sidebar, the images and the panel keep their size.
-- **Resizable sidebar** — drag the divider; the width is remembered.
+- **Resizable sidebar** — drag the divider; the width is remembered. It stops at the width
+  its own header row still fits in, rather than squeezing the controls.
+- **See where a link leads** — hover a link or an image and its real target appears in a
+  strip at the foot of the page, the way a browser does. An in-page link names the entry it
+  jumps to; an image shows its URL.
 - **Thumbnails** — the Finder shows a card built from the book's own title, author and
   opening lines rather than a generic icon.
-- **A configuration window** — the app itself is a small settings window: switch the two
-  Markdown extensions on or off, choose whether Markdown is rendered with JavaScript or
-  shown as plain source, and pick System, Light or Dark.
+- **A configuration window** — the app itself is a settings window, in two tabs. *General*
+  switches the two Markdown extensions on or off and reports what this Mac has actually
+  registered, with the system's own extension pane one button away. *Markdown* holds the
+  rendering choices: JavaScript or plain source, line numbers, System/Light/Dark, and
+  whether Markdown previews may load remote images.
 - **Large books stay responsive** — the book is one page, so sections below the fold are
   not laid out until they are needed.
-- **No network** — the extensions are sandboxed, and the custom scheme only ever serves the
-  book being previewed plus the extension's own bundled rendering assets. Nothing is
-  fetched from the network.
+- **No network by default** — the extensions are sandboxed, and the custom scheme only ever
+  serves the book being previewed plus the extension's own bundled rendering assets. A
+  remote (http/https) image is not fetched: in Markdown it is replaced by a placeholder
+  naming its host unless you allow network images in the app's Markdown tab, and EPUB/MOBI
+  previews never load one at all.
 
 ## Install
 
@@ -94,10 +103,13 @@ generates, so `[text](#heading)` links keep working. Inline and display LaTeX (`
 diagrams. Both libraries are vendored and served through the extension's own scheme, so
 math and diagrams work with no network at all.
 
-The app window is where Markdown is configured: register the Markdown extensions on or off,
-render with JavaScript or show the raw source, and choose System, Light or Dark. The
-settings travel from the unsandboxed app into the sandboxed Markdown extension through a
-small JSON file in the extension's own container. Only the Markdown extension reads them.
+The app window is where Markdown is configured, in its Markdown tab: render with JavaScript
+or show the raw source, line numbers, System/Light/Dark, and whether a remote
+http/https image may be loaded. Network images are off by default — until you turn them on, a
+remote image appears as a placeholder naming its host. The settings travel from the
+unsandboxed app into the sandboxed Markdown extension through a small JSON file in the
+extension's own container. Only the Markdown extension reads them; EPUB/MOBI previews ignore
+them, and never load a remote image.
 
 With JavaScript rendering off, a file is shown as escaped source instead, which is handy for
 inspecting the markup; math and diagrams then appear as their source text.
@@ -114,8 +126,10 @@ inspecting the markup; math and diagrams then appear as their source text.
 ![The chapter being read highlighted in the sidebar](docs/screenshot-chapter.png)
 
 The chapter you are reading is highlighted in the table of contents as you scroll, and the
-part it lives in unfolds itself so that entry stays in view. In a bilingual edition the
-book's own cross-links (here 英文 / 中文) work as well.
+part it lives in unfolds itself so that entry stays in view; the toggle beside *fold all*
+stops the tree closing anything behind you, if you would rather it only ever open. Hovering a
+link or an image names its target in a strip at the foot of the page. In a bilingual edition
+the book's own cross-links (here 英文 / 中文) work as well.
 
 ## Known limitations
 
@@ -131,6 +145,10 @@ book's own cross-links (here 英文 / 中文) work as well.
 - **Markdown math and diagrams need JavaScript rendering.** Turn that setting off and you
   get the escaped source instead. MDX `import` / `export` lines are dropped and JSX
   components are not executed either way.
+- **Remote images are opt-in, and Markdown only.** They stay off until you allow network
+  images in the app's Markdown tab; while off, a remote image is a placeholder naming its
+  host. Plain `http` needs that switch too — without it the transport itself refuses the
+  load. EPUB/MOBI previews never load remote images, switch or no switch.
 - **Quick Look picks one extension per type.** If another reader also previews the same
   formats, disable it while testing EBookQL.
 

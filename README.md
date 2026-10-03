@@ -1,13 +1,13 @@
 # EBookQL
 
-Quick Look previews **and thumbnails** for EPUB, MOBI, AZW and AZW3 books, and for
-Markdown, on macOS. Select a book or a note in the Finder, press **Space**, read it.
+Quick Look previews **and thumbnails** for EPUB, MOBI, AZW, AZW3 and FictionBook books, and
+for Markdown, on macOS. Select a book or a note in the Finder, press **Space**, read it.
 
 ![screenshot](docs/screenshot.png)
 
-One reader UI over three parsers (an EPUB one, a libmobi-backed MOBI one, and a
-JavaScriptCore + `marked` Markdown one), so every format looks and behaves the same: the
-same sidebar, the same controls, the same reading position, the same thumbnail card.
+One reader UI over four parsers (an EPUB one, a libmobi-backed MOBI one, a FictionBook one,
+and a JavaScriptCore + `marked` Markdown one), so every format looks and behaves the same:
+the same sidebar, the same controls, the same reading position, the same thumbnail card.
 Markdown brings its own math and diagrams, rendered entirely offline.
 
 ## What you get
@@ -18,6 +18,10 @@ Markdown brings its own math and diagrams, rendered entirely offline.
   Inline and display LaTeX become real math via KaTeX, fenced `mermaid` blocks become
   diagrams, and heading ids keep `[text](#heading)` links working. Both libraries are
   bundled, so nothing is fetched from the network.
+- **FictionBook** — `.fb2` opens with its base64 images inline. A book whose chapter titles
+  were dropped by whatever converted it still gets a sidebar: the contents are read back out
+  of the file's own section structure and headings, and the sidebar says at the top that they
+  were guessed rather than passing them off as the book's own table of contents.
 - **Table of contents** — a folding tree in the sidebar, which opens as a plain outline. The
   entry you are reading is highlighted as you scroll, its branch unfolds itself so the
   highlight is never hidden, and the sidebar follows to keep it in view. The branch you have
@@ -38,24 +42,25 @@ Markdown brings its own math and diagrams, rendered entirely offline.
   jumps to; an image shows its URL.
 - **Thumbnails** — the Finder shows a card built from the book's own title, author and
   opening lines rather than a generic icon.
-- **A configuration window** — the app itself is a settings window, in two tabs. *General*
+- **A configuration window** — the app itself is a settings window, in three tabs. *General*
   switches the two Markdown extensions on or off and reports what this Mac has actually
   registered, with the system's own extension pane one button away. *Markdown* holds the
   rendering choices: JavaScript or plain source, line numbers, System/Light/Dark, and
-  whether Markdown previews may load remote images.
+  whether Markdown previews may load remote images. *FB2* holds the one FictionBook choice:
+  whether a book whose chapter titles are missing may have its contents guessed from its text.
 - **Large books stay responsive** — the book is one page, so sections below the fold are
   not laid out until they are needed.
 - **No network by default** — the extensions are sandboxed, and the custom scheme only ever
   serves the book being previewed plus the extension's own bundled rendering assets. A
   remote (http/https) image is not fetched: in Markdown it is replaced by a placeholder
-  naming its host unless you allow network images in the app's Markdown tab, and EPUB/MOBI
+  naming its host unless you allow network images in the app's Markdown tab, and EPUB/MOBI/FB2
   previews never load one at all.
 
 ## Install
 
 ### From the disk image
 
-1. Open `EBookQL-0.2.0.dmg`.
+1. Open `EBookQL-0.3.0.dmg`.
 2. Drag **EBookQL** onto the **Applications** folder in that window.
 3. **Open EBookQL once.** That is what registers its four extensions: copying the app by
    itself registers nothing. The window reports whether they are live, carries the
@@ -86,13 +91,15 @@ script points `DEVELOPER_DIR` at Xcode itself.
 | Format | Read by | Notes |
 |---|---|---|
 | `.epub` | the project's own ZIP + OPF/NCX reader | zipped `.epub` |
+| `.fb2` | the project's own XML reader | FictionBook with its base64 images; contents are derived from the book's own sections and headings (see [FictionBook](#fictionbook)) |
 | `.mobi`, `.azw`, `.azw3` | [libmobi](https://github.com/bfabiszewski/libmobi), vendored | KF7 and KF8; images and the container's NCX table of contents are read from the file |
 | `.md`, `.markdown`, `.mdx` | JavaScriptCore + embedded [marked](https://github.com/markedjs/marked) | GFM; front matter supplies title/author; LaTeX math and mermaid diagrams render offline |
 
-The MOBI family has no system-declared UTI, so the app exports one; the extensions also
-declare the UTIs other readers export, because which declaration wins is not under the
-extension's control. `.md` and `.markdown` use the system's own
-`net.daringfireball.markdown` type, and `.mdx` is EBookQL's own type conforming to it.
+The MOBI family and FictionBook have no system-declared UTI, so the app exports one for each
+(`.fb2` is `com.rocaltair.fb2`); the extensions also declare the UTIs other readers export,
+because which declaration wins is not under the extension's control. `.md` and `.markdown`
+use the system's own `net.daringfireball.markdown` type, and `.mdx` is EBookQL's own type
+conforming to it.
 
 ## Markdown
 
@@ -107,12 +114,34 @@ The app window is where Markdown is configured, in its Markdown tab: render with
 or show the raw source, line numbers, System/Light/Dark, and whether a remote
 http/https image may be loaded. Network images are off by default — until you turn them on, a
 remote image appears as a placeholder naming its host. The settings travel from the
-unsandboxed app into the sandboxed Markdown extension through a small JSON file in the
-extension's own container. Only the Markdown extension reads them; EPUB/MOBI previews ignore
-them, and never load a remote image.
+unsandboxed app into the sandboxed extensions through a small JSON file, written into each
+extension's own container: the Markdown extension reads all of it, and the book extension
+reads its one FictionBook key. EPUB/MOBI previews ignore every one of them, and never load a
+remote image.
 
 With JavaScript rendering off, a file is shown as escaped source instead, which is handy for
 inspecting the markup; math and diagrams then appear as their source text.
+
+## FictionBook
+
+`.fb2` files are XML with their images embedded as base64, so a preview is the file itself —
+no archive and no side files. Their contents come from the book's own sections and headings.
+
+Most `.fb2` files in the wild were converted from something else, and the converters drop
+every `<title>` element — which is what a FictionBook table of contents is made of. Those
+books still carry their `<section>` structure, and a section normally opens with its own
+chapter title as an ordinary paragraph, so the preview reads that structure back:
+
+- a section's first paragraph is that section's title, at the level its `<title>` would have
+  had — so a chapter and the subheadings under it nest the way the book does;
+- a paragraph that names its own level ("Part II …", "Chapter 4 …", "Appendix", "Глава 1")
+  is a heading at that level;
+- failing both, a paragraph that is nothing but one bold line counts as a subheading.
+
+The app's **FB2** tab turns this off (*Guess the contents from the text*, on by default).
+While it is on, a book whose contents were guessed says so at the top of the sidebar —
+*"Contents guessed from the text — this file has no chapter titles of its own."* A book that
+has titles of its own is never guessed at, whatever the setting says.
 
 ## Requirements
 
@@ -145,6 +174,12 @@ the book's own cross-links (here 英文 / 中文) work as well.
 - **Markdown math and diagrams need JavaScript rendering.** Turn that setting off and you
   get the escaped source instead. MDX `import` / `export` lines are dropped and JSX
   components are not executed either way.
+- **Guessed FB2 contents are a guess.** For a book with no chapter titles at all, the sidebar
+  is built from the file's section structure and its heading-like paragraphs. The entries are
+  marked as guessed at the top of the sidebar, but a line of running text can still end up in
+  there (a flattened "Appendix: Table of Contents" page, in one tested book) and a short
+  title-page section contributes an entry of its own. Turn the FB2 tab's switch off and such
+  a book simply has no sidebar.
 - **Remote images are opt-in, and Markdown only.** They stay off until you allow network
   images in the app's Markdown tab; while off, a remote image is a placeholder naming its
   host. Plain `http` needs that switch too — without it the transport itself refuses the

@@ -109,6 +109,7 @@ EBookQL/
 - Validate with `qlmanage` — it uses the old generator DB and shows a misleading `[DEBUG]` badge; Finder is the judge.
 - Put `EBookQLPreview/ReaderAssets/` back into the shared `EBookQLPreview.appex`: only `EBookQLMarkdownPreview.appex` may carry it (the static Kit cannot bundle resources).
 - Route the settings channel through App Groups or `UserDefaults`: the unsandboxed host writes `settings.json` into the sandboxed Markdown appex's own container. App Groups need a provisioning profile and can silently fail under ad-hoc signing.
+- Register the app without its appexes, or trust `pluginkit -a`'s exit status. A bare `lsregister -f` leaves the nested appexes out of the LaunchServices database (`Extension … not found in LS database`), the four records are then dropped again, and with no generator the Quick Look panel simply does not appear — measured after one install that looked fine. `install.sh` registers with `-R -trusted` and verifies all four ids afterwards, naming "open the app once" as the remedy.
 
 ## UNIQUE STYLES
 - Embedded reader UI: `ReaderAssets.css` / `.js` are Swift string literals, not bundle resources.

@@ -474,6 +474,58 @@ enum ReaderAssets {
     /* End of the FictionBook skin: same rule as the Markdown one above - every selector is
        gated on html[data-format="fb2"], an attribute ReaderDocument emits only for an FB2
        book, so no other format matches any of it. */
+
+    /* DjVu: one scan per section, so this skin is about the page box, not about text.
+       Gated the same way (html[data-format="djvu"]); the page's own script adds
+       `djvu-ready` / `djvu-failed` per frame as it decodes it. */
+    html[data-format="djvu"] .chapter {
+        /* Every page's height is known from its own aspect ratio, so laying them all
+           out costs nothing - and it is what makes the scrollbar, the reading fraction
+           and a restored position exact before a single page has been decoded.
+           (`content-visibility: auto` would leave every page an estimate.) */
+        content-visibility: visible;
+        margin: 0 0 18px 0;
+    }
+    html[data-format="djvu"] #content { padding: 20px 20px 40vh 20px; }
+    /* A scan needs a desk. The reader's own near-white background leaves a white page
+       with no edge at all, so a DjVu page sits on grey (dark: on near-black) - the page
+       itself stays white in both, because that is what paper is. */
+    html[data-format="djvu"], html[data-format="djvu"] body { background: #d2d2d7; }
+    @media (prefers-color-scheme: dark) {
+        html[data-format="djvu"], html[data-format="djvu"] body { background: #131315; }
+    }
+    /* The page's heading exists for the reading position and the sidebar highlight, and
+       takes no room on screen. Not `display: none`: it has to have a real box. */
+    html[data-format="djvu"] #content .djvu-page-no {
+        position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0;
+        overflow: hidden; clip-path: inset(50%); white-space: nowrap;
+        -webkit-user-select: none; user-select: none;
+    }
+    html[data-format="djvu"] #content .djvu-frame {
+        position: relative; box-sizing: border-box;
+        /* Percent of the text column, times the reader's zoom: a page fills the column
+           at 100%, and A+/A- scales the page (past the column width it scrolls sideways,
+           the way a scan viewer does). The script sets the variable from the reader's
+           own zoom level. */
+        width: calc(100% * var(--djvu-zoom, 1));
+        margin: 0 auto; overflow: hidden; border-radius: 2px;
+        background: #fff; color: #000; box-shadow: 0 2px 9px rgba(0, 0, 0, .34);
+    }
+    html[data-format="djvu"] #content .djvu-frame::after {
+        content: attr(data-label);
+        position: absolute; inset-block-start: .55em; inset-inline-start: .8em;
+        font-size: 12px; color: rgba(0, 0, 0, .2);
+    }
+    /* Decoded: the number has done its job. Cleared, never reloaded. */
+    html[data-format="djvu"] #content .djvu-frame.djvu-ready::after { content: none; }
+    html[data-format="djvu"] #content .djvu-frame.djvu-failed::after {
+        content: attr(data-label) " — this page could not be decoded";
+        inset: 0; display: flex; align-items: center; justify-content: center;
+        font-size: 13px; color: #c0392b;
+    }
+    html[data-format="djvu"] #content .djvu-frame canvas {
+        display: block; width: 100%; height: auto;
+    }
     """
 
     /// Injected into every page. Talks to the extension over three script messages.

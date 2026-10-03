@@ -141,7 +141,16 @@ targets:
         # ReaderAssets (the vendored Mermaid/KaTeX) is excluded here: it now ships
         # only in EBookQLMarkdownPreview, which forces it into the resources phase so
         # the reader finds it at the appex bundle root by bare filename.
-        excludes: ["Info.plist", "*.entitlements", "ReaderAssets", "AGENTS.md"]
+        # DjVuAssets is added below as resources instead of compiled-in sources.
+        excludes: ["Info.plist", "*.entitlements", "ReaderAssets", "DjVuAssets", "AGENTS.md"]
+      # The DjVu page decoder: the vendored JavaScript rasteriser (ZP/BZZ, JB2, IW44,
+      # MMR, the container and the compositor) plus the reader's own glue. It ships
+      # only here - no other appex can be handed a .djvu - and lands flat at the appex
+      # bundle root, where `ekbres://assets/<file>` finds a file by bare name and the
+      # modules can still import each other by relative path.
+      - path: EBookQLPreview/DjVuAssets
+        buildPhase: resources
+        excludes: ["AGENTS.md"]
     settings:
       base:
         PRODUCT_NAME: EBookQLPreview
@@ -210,7 +219,7 @@ targets:
     platform: macOS
     sources:
       - path: EBookQLPreview
-        excludes: ["Info.plist", "*.entitlements", "ReaderAssets", "AGENTS.md"]
+        excludes: ["Info.plist", "*.entitlements", "ReaderAssets", "DjVuAssets", "AGENTS.md"]
       - path: EBookQLPreview/ReaderAssets
         buildPhase: resources
         # NOTICES.md is a payload (licence notices); its sibling AGENTS.md is not.

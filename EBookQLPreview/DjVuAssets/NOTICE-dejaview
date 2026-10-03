@@ -1,0 +1,57 @@
+DejaView — provenance and third-party attributions
+===================================================
+
+DejaView decodes the DjVu image format, which is openly published. The decoder
+is built from public and permissively-licensed sources.
+
+ZP arithmetic coder, JB2, IW44 wavelet, BZZ
+-------------------------------------------
+These codecs implement the public DjVu format. They were cross-referenced
+against DjvuNet (https://github.com/DjvuNet/DjvuNet), an MIT-licensed .NET DjVu
+library. The ZP coder adaptation table (src/zp_table.js) is taken from DjvuNet.
+DjvuNet is distributed under the MIT License:
+
+    Copyright (c) 2014 Telavian
+    Copyright (c) 2017 Jacek Blaszczynski
+    Licensed under the MIT License — https://github.com/DjvuNet/DjvuNet
+
+MMR / Smmr
+----------
+The MMR decoder implements CCITT Group 4. Its run-length code tables
+(src/mmr_tables.js) are the public ITU-T T.6 / T.4 standard codes.
+
+The Smmr conformance test (tests/test_smmr.mjs) cross-checks the decoder against
+an independent G4 decoder, tests/ccitt_oracle.mjs — the pure-JS CCITTFaxDecoder
+vendored from pdf.js v3.11.174 (Copyright 2012 Mozilla Foundation), used under
+the Apache License 2.0 (LICENSES/Apache-2.0.txt). It is test-only (not part of
+the shipped library); the only change from upstream is replacing a pdf.js util
+import with local stubs.
+
+IW44 wavelet
+------------
+The IW44 quantization steps and band structure follow the published IW44
+wavelet design (L. Bottou et al.) and match DjvuNet's.
+
+JPEG layers (BGjp / FGjp)
+-------------------------
+JPEG-layer decoding uses, as a fallback, JsPeg — a pure-JavaScript JPEG decoder
+vendored under src/jspeg/ (decode path only, synced from commit a0d19f1). JsPeg is MIT-licensed
+(https://github.com/Alpaq92/JsPeg), a port of yigolden/JpegLibrary (also MIT);
+its inverse DCT is ported from stb_image (Sean Barrett), released into the public
+domain. JsPeg therefore carries no obligations beyond the MIT terms:
+
+    Copyright (c) 2019-2021 yigolden (original JpegLibrary)
+    Copyright (c) 2026 JsPeg contributors
+    Licensed under the MIT License — https://github.com/Alpaq92/JsPeg
+
+When the host provides a native JPEG codec (browser createImageBitmap), that is
+used in preference to JsPeg.
+
+DjVuLibre
+---------
+The codecs here are an independent JavaScript implementation of the public DjVu
+format, cross-referenced against the MIT-licensed DjvuNet (above). DjVuLibre
+(the GPL reference implementation) is not included in, or distributed with, this
+project, and no DjVuLibre source is present in this repository; it served as a
+conformance test oracle — encoding the sample .djvu files used to validate
+decoder output.

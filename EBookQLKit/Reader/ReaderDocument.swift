@@ -167,11 +167,20 @@ public struct ReaderDocument {
         switch book.format {
         case .markdown: formatAttribute = " data-format=\"markdown\""
         case .fb2: formatAttribute = " data-format=\"fb2\""
+        case .djvu: formatAttribute = " data-format=\"djvu\""
         default: formatAttribute = ""
         }
         let themeAttribute = book.format == .markdown
             ? " data-theme=\"\(resolvedTheme(options.theme))\"\(formatAttribute)"
             : formatAttribute
+
+        // A DjVu page is a scan: nothing in the markup can show it, so the page fetches
+        // each page's bytes and decodes them itself. The decoder is an appex resource
+        // (like the Markdown page's Mermaid/KaTeX), loaded as a module so it can pull in
+        // its own parts; it stays dormant on every other format's page.
+        let formatScript = book.format == .djvu
+            ? "\n    <script type=\"module\" src=\"\(BookResourceScheme.name)://assets/djvu-viewer.js\"></script>"
+            : ""
 
         let html = """
         <!doctype html>
@@ -186,7 +195,7 @@ public struct ReaderDocument {
             \(sidebar ?? "")
             <div id="content">\(sectionsHTML)</div>
             <script>window.__ql = \(injectedState(options));</script>
-            <script>\(ReaderAssets.js)</script>
+            <script>\(ReaderAssets.js)</script>\(formatScript)
         </body>
         </html>
         """

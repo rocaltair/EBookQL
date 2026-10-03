@@ -83,10 +83,25 @@ final class ReaderSchemeHandler: NSObject, WKURLSchemeHandler {
         os_log("served %{public}@ (%{public}d bytes, %{public}@)", log: Self.log, type: .debug,
                url.path, resource.data.count, resource.mimeType ?? "by extension")
         // A MOBI record carries its real type; for an EPUB the file name is the only clue.
-        let response = URLResponse(url: url,
-                                   mimeType: resource.mimeType ?? Self.mimeType(for: url.path),
-                                   expectedContentLength: resource.data.count,
-                                   textEncodingName: nil)
+        //
+        // The `Access-Control-Allow-Origin` header is what lets a page that was loaded from
+        // a file URL *fetch* something off this scheme. WebKit applies CORS to custom
+        // schemes like any other, and without the header a `fetch()`/XHR from the reader
+        // page fails while an `<img>`/`<script>` load succeeds - which is exactly the trap
+        // a DjVu page (it fetches its page images and decodes them itself) would fall into.
+        // Only the previewed page can reach this scheme at all, so the wildcard is not a
+        // widening of anything.
+        let response = HTTPURLResponse(
+            url: url,
+            statusCode: 200,
+            httpVersion: "HTTP/1.1",
+            headerFields: [
+                "Content-Type": resource.mimeType ?? Self.mimeType(for: url.path),
+                "Content-Length": String(resource.data.count),
+                "Access-Control-Allow-Origin": "*",
+            ]
+        ) ?? URLResponse(url: url, mimeType: resource.mimeType ?? Self.mimeType(for: url.path),
+                         expectedContentLength: resource.data.count, textEncodingName: nil)
         task.didReceive(response)
         task.didReceive(resource.data)
         task.didFinish()

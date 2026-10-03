@@ -65,7 +65,7 @@ struct ContentView: View {
                 .frame(width: 52, height: 52)
             VStack(alignment: .leading, spacing: 2) {
                 Text("EBookQL").font(.title2).bold()
-                Text("Quick Look previews and thumbnails for EPUB, MOBI, AZW, AZW3 and Markdown.")
+                Text("Quick Look previews and thumbnails for EPUB, MOBI, AZW, AZW3, FictionBook, DjVu, CBZ and Markdown.")
                     .foregroundStyle(.secondary)
                 Text("Select a book in the Finder and press Space to preview it.")
                     .foregroundStyle(.secondary)
@@ -84,8 +84,9 @@ struct ContentView: View {
             Section {
                 Toggle("Enable Markdown previews", isOn: markdownBinding)
                     .help("Off, macOS falls back to its own plain-text preview for .md and .mdx. "
-                          + "The book formats have no switch here — Quick Look maps one file type "
-                          + "to one extension, and EBookQL is the only one for EPUB/MOBI/AZW/AZW3.")
+                          + "The book formats — EPUB, MOBI/AZW/AZW3, FictionBook, DjVu, CBZ — have "
+                          + "no switch here: Quick Look maps one file type to one extension, and "
+                          + "EBookQL is the only one for them.")
             } header: {
                 Text("Markdown extensions")
             }
@@ -156,8 +157,8 @@ struct ContentView: View {
                         Text(themeLabel(theme)).tag(theme)
                     }
                 }
-                .help("Markdown previews only. EPUB/MOBI previews keep following the system's own "
-                      + "light/dark appearance.")
+                .help("Markdown previews only. Every book format — EPUB, MOBI/AZW/AZW3, FictionBook, "
+                      + "DjVu, CBZ — keeps following the system's own light/dark appearance.")
             } header: {
                 Text("Appearance")
             }
@@ -168,8 +169,8 @@ struct ContentView: View {
                           + "decision, not the app's. On, Markdown previews load remote images over "
                           + "http and https, and the strip at the foot of the page shows where a "
                           + "hovered image comes from. Off, a remote image is replaced by a "
-                          + "placeholder naming its host and nothing is fetched. EPUB/MOBI previews "
-                          + "never load remote images.")
+                          + "placeholder naming its host and nothing is fetched. No book format "
+                          + "loads a remote image, whatever this is set to.")
             } header: {
                 Text("Network")
             }
@@ -295,6 +296,7 @@ struct ContentView: View {
                             }
                         }
                     }
+                    .help(item.help)
                 }
                 if extensions.contains(where: { $0.registered && !$0.enabled }) {
                     Text("An extension you switched off stays off until you turn it back on — see Extension settings… below.")

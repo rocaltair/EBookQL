@@ -31,6 +31,9 @@ enum ExtensionRegistration {
     struct Extension: Identifiable {
         let id: String
         let title: String
+        /// Which formats this extension is for. Shown as the row's tooltip: the titles
+        /// name the extension, and the formats are what a reader actually wants to know.
+        let help: String
         /// Where it is registered from, when it is registered at all.
         var path: String?
         var enabled: Bool
@@ -51,12 +54,16 @@ enum ExtensionRegistration {
     static func survey() -> [Extension] {
         let listed = pluginkitListing()
         return [Extension(id: previewID, title: "Quick Look preview",
+                          help: "Preview panel for EPUB, MOBI, AZW, AZW3, FictionBook, DjVu and CBZ books.",
                           path: listed[previewID]?.path, enabled: listed[previewID]?.enabled ?? false),
                 Extension(id: thumbnailID, title: "Finder thumbnails",
+                          help: "Finder cards for the same books: EPUB, MOBI, AZW, AZW3, FictionBook, DjVu and CBZ.",
                           path: listed[thumbnailID]?.path, enabled: listed[thumbnailID]?.enabled ?? false),
                 Extension(id: markdownPreviewID, title: "Markdown Preview",
+                          help: "Preview panel for .md, .markdown and .mdx — math and diagrams included.",
                           path: listed[markdownPreviewID]?.path, enabled: listed[markdownPreviewID]?.enabled ?? false),
                 Extension(id: markdownThumbnailID, title: "Markdown Thumbnail",
+                          help: "Finder cards for .md, .markdown and .mdx.",
                           path: listed[markdownThumbnailID]?.path, enabled: listed[markdownThumbnailID]?.enabled ?? false)]
     }
 

@@ -27,7 +27,7 @@
 	<key>LSMinimumSystemVersion</key>
 	<string>$(MACOSX_DEPLOYMENT_TARGET)</string>
 	<key>NSHumanReadableCopyright</key>
-	<string>EBookQL — MIT Licence. MOBI parsing by libmobi (LGPL-3.0-or-later).</string>
+	<string>EBookQL — MIT Licence. MOBI parsing by libmobi (LGPL-3.0-or-later); DjVu page decoding by DejaView (MIT).</string>
 	<!-- The MOBI family and FictionBook have no system-declared UTI, so EBookQL
 	     declares those. `.epub` is covered by org.idpf.epub-container, which the system
 	     provides. .md and .markdown are covered by net.daringfireball.markdown: EBookQL
@@ -103,6 +103,27 @@
 				</array>
 				<key>public.mime-type</key>
 				<string>image/vnd.djvu</string>
+			</dict>
+		</dict>
+		<!-- CBZ. Nothing declares .cbz either (measured: both .cbz and .cbr are dynamic
+		     types). .cbr (RAR) and .cbt (TAR) are NOT claimed: only a ZIP is read here. -->
+		<dict>
+			<key>UTTypeConformsTo</key>
+			<array>
+				<string>public.data</string>
+			</array>
+			<key>UTTypeDescription</key>
+			<string>Comic book archive</string>
+			<key>UTTypeIdentifier</key>
+			<string>com.rocaltair.cbz</string>
+			<key>UTTypeTagSpecification</key>
+			<dict>
+				<key>public.filename-extension</key>
+				<array>
+					<string>cbz</string>
+				</array>
+				<key>public.mime-type</key>
+				<string>application/vnd.comicbook+zip</string>
 			</dict>
 		</dict>
 		<!-- MDX has no system-declared UTI either. Conforming to

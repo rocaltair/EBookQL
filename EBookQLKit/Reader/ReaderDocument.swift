@@ -148,14 +148,23 @@ public struct ReaderDocument {
             autoFold: options.autoFoldTOC
         )
 
-        // Only a markdown book resolves a concrete scheme and tags the root with it.
-        // An EPUB/MOBI page gets no attribute at all, so its stylesheet keeps following
-        // `prefers-color-scheme` exactly as before (see `resolvedTheme`). The same gate
-        // adds `data-format="markdown"`: every GitHub-flavored content rule in
-        // ReaderAssets.css is scoped under it, so the other formats cannot be touched.
+        // Only a markdown book resolves a concrete scheme and tags the root with it. An
+        // EPUB/MOBI page gets no attribute at all, so its stylesheet keeps following
+        // `prefers-color-scheme` exactly as before (see `resolvedTheme`).
+        //
+        // `data-format` is the other half: every format-specific content rule in
+        // ReaderAssets.css is scoped under it, so a rule written for one format cannot touch
+        // another. Markdown carries it beside `data-theme`; an FB2 page carries `data-format`
+        // only, because it has no theme of its own to force.
+        let formatAttribute: String
+        switch book.format {
+        case .markdown: formatAttribute = " data-format=\"markdown\""
+        case .fb2: formatAttribute = " data-format=\"fb2\""
+        default: formatAttribute = ""
+        }
         let themeAttribute = book.format == .markdown
-            ? " data-theme=\"\(resolvedTheme(options.theme))\" data-format=\"markdown\""
-            : ""
+            ? " data-theme=\"\(resolvedTheme(options.theme))\"\(formatAttribute)"
+            : formatAttribute
 
         let html = """
         <!doctype html>

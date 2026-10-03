@@ -83,7 +83,7 @@ status() {
     pluginkit -m -v 2>/dev/null | grep -i "$APP_NAME" || echo "  (none)"
     echo "--- how the book extensions resolve ---"
     /usr/bin/swift -e 'import UniformTypeIdentifiers
-for ext in ["epub", "mobi", "azw", "azw3", "md", "markdown", "mdx"] {
+for ext in ["epub", "mobi", "azw", "azw3", "fb2", "md", "markdown", "mdx"] {
     print("  .\(ext) ->", UTType(filenameExtension: ext)?.identifier ?? "unknown")
 }' 2>/dev/null || true
 }

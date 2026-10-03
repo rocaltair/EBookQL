@@ -28,12 +28,37 @@
 	<string>$(MACOSX_DEPLOYMENT_TARGET)</string>
 	<key>NSHumanReadableCopyright</key>
 	<string>EBookQL — MIT Licence. MOBI parsing by libmobi (LGPL-3.0-or-later).</string>
-	<!-- The MOBI family has no system-declared UTI, so EBookQL declares one.
-	     .epub is covered by org.idpf.epub-container, which the system provides.
-	     .md and .markdown are covered by the system UTI net.daringfireball.markdown:
-	     EBookQL references it directly rather than declaring an own type. -->
+	<!-- The MOBI family and FictionBook have no system-declared UTI, so EBookQL
+	     declares those. `.epub` is covered by org.idpf.epub-container, which the system
+	     provides. .md and .markdown are covered by net.daringfireball.markdown: EBookQL
+	     references it directly rather than declaring an own type. -->
 	<key>UTExportedTypeDeclarations</key>
 	<array>
+		<!-- FictionBook. Measured on macOS 15.8: nothing declares .fb2, so until
+		     EBookQL does, `UTType(filenameExtension: "fb2")` is a dynamic type and
+		     Quick Look has no way to know an FB2 file is a book. It is XML with
+		     base64 images inside, and it conforms to public.xml as well as
+		     public.data for that reason. -->
+		<dict>
+			<key>UTTypeConformsTo</key>
+			<array>
+				<string>public.xml</string>
+				<string>public.data</string>
+			</array>
+			<key>UTTypeDescription</key>
+			<string>FictionBook document</string>
+			<key>UTTypeIdentifier</key>
+			<string>com.rocaltair.fb2</string>
+			<key>UTTypeTagSpecification</key>
+			<dict>
+				<key>public.filename-extension</key>
+				<array>
+					<string>fb2</string>
+				</array>
+				<key>public.mime-type</key>
+				<string>application/x-fictionbook+xml</string>
+			</dict>
+		</dict>
 		<dict>
 			<key>UTTypeConformsTo</key>
 			<array>

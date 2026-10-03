@@ -13,6 +13,7 @@ public enum BookFormat: String, Sendable {
     case mobi
     case azw
     case azw3
+    case fb2
     case markdown
 }
 

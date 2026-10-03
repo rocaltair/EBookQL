@@ -31,6 +31,7 @@
 				<string>org.idpf.epub-container</string>
 				<string>com.apple.ibooks.epub</string>
 				<string>com.rocaltair.mobi</string>
+				<string>com.rocaltair.fb2</string>
 				<!-- See the note in EBookQLPreview/Info.plist. -->
 				<string>gkr.mobi.quicklook</string>
 				<string>com.amazon.mobi</string>
@@ -45,6 +46,26 @@
 	</dict>
 	<key>UTImportedTypeDeclarations</key>
 	<array>
+		<dict>
+			<key>UTTypeConformsTo</key>
+			<array>
+				<string>public.xml</string>
+				<string>public.data</string>
+			</array>
+			<key>UTTypeDescription</key>
+			<string>FictionBook document</string>
+			<key>UTTypeIdentifier</key>
+			<string>com.rocaltair.fb2</string>
+			<key>UTTypeTagSpecification</key>
+			<dict>
+				<key>public.filename-extension</key>
+				<array>
+					<string>fb2</string>
+				</array>
+				<key>public.mime-type</key>
+				<string>application/x-fictionbook+xml</string>
+			</dict>
+		</dict>
 		<dict>
 			<key>UTTypeConformsTo</key>
 			<array>

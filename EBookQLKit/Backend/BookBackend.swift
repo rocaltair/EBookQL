@@ -57,7 +57,9 @@ public extension BookBackend {
 
 public enum BookOpener {
     /// Order matters only for formats that share an extension.
-    public static let backends: [BookBackend.Type] = [EPUBBackend.self, MOBIBackend.self, MarkdownBackend.self]
+    public static let backends: [BookBackend.Type] = [
+        EPUBBackend.self, MOBIBackend.self, FB2Backend.self, MarkdownBackend.self,
+    ]
 
     public static func backend(for url: URL) -> BookBackend.Type? {
         let ext = url.pathExtension.lowercased()

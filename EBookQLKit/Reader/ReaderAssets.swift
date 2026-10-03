@@ -437,10 +437,43 @@ enum ReaderAssets {
     }
     html[data-format="markdown"] #content details[open] > summary { margin-bottom: 8px; }
 
-    /* End of the GitHub-flavored Markdown skin: every selector above is gated on
-       html[data-format="markdown"], an attribute ReaderDocument emits only for a
-       markdown book (alongside data-theme). An EPUB/MOBI page carries neither
-       attribute, matches none of these rules, and renders exactly as it did before. */
+    /* FictionBook: the elements FB2 has and HTML does not. Scoped to the format attribute a
+       FB2 page carries, so an EPUB/MOBI page (no attribute) matches none of it. */
+    html[data-format="fb2"] #content p { margin: 0 0 .6em 0; text-indent: 1.2em; }
+    html[data-format="fb2"] #content p.fb2-empty-line { margin: 0; height: 1em; }
+    html[data-format="fb2"] #content .fb2-body-break {
+        margin: 32px 0; border-top: 1px solid var(--toc-border);
+    }
+    html[data-format="fb2"] #content .fb2-subtitle {
+        font-weight: 600; text-align: center; text-indent: 0; margin: 1.2em 0 .6em;
+    }
+    html[data-format="fb2"] #content .fb2-minor-title { font-weight: 600; text-indent: 0; }
+    html[data-format="fb2"] #content .fb2-epigraph,
+    html[data-format="fb2"] #content .fb2-cite {
+        margin: 0 0 1em 1.6em; font-style: italic; opacity: .9;
+    }
+    html[data-format="fb2"] #content .fb2-cite p { text-indent: 0; }
+    html[data-format="fb2"] #content .fb2-text-author {
+        text-align: right; text-indent: 0; font-style: italic; opacity: .75;
+    }
+    html[data-format="fb2"] #content .fb2-poem { margin: 1em 0 1.4em 1.2em; }
+    html[data-format="fb2"] #content .fb2-stanza { margin: 0 0 .8em 0; }
+    html[data-format="fb2"] #content .fb2-verse { text-indent: 0; margin: 0; }
+    html[data-format="fb2"] #content .fb2-annotation {
+        margin: 0 0 1.2em; padding: 0 1em; opacity: .85; font-size: .95em;
+    }
+    html[data-format="fb2"] #content .fb2-note-ref { font-size: .75em; vertical-align: super; }
+    html[data-format="fb2"] #content img.fb2-image { display: block; margin: 1em auto; }
+    html[data-format="fb2"] #content table {
+        border-collapse: collapse; margin: 1em 0;
+    }
+    html[data-format="fb2"] #content td, html[data-format="fb2"] #content th {
+        border: 1px solid var(--toc-border); padding: .3em .6em; text-align: start;
+    }
+
+    /* End of the FictionBook skin: same rule as the Markdown one above - every selector is
+       gated on html[data-format="fb2"], an attribute ReaderDocument emits only for an FB2
+       book, so no other format matches any of it. */
     """
 
     /// Injected into every page. Talks to the extension over three script messages.

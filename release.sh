@@ -7,8 +7,8 @@
 #
 # The image holds the app, a symlink to /Applications and a short read-me, which is the
 # whole install: drag the app onto the symlink, then open it once. Opening it is what
-# registers the two extensions with the system — measured, a copy on its own registers
-# nothing, and the first launch registers both and leaves them enabled. The app also does
+# registers the four extensions with the system — measured, a copy on its own registers
+# nothing, and the first launch registers all of them and leaves them enabled. The app also does
 # that itself on launch and reports the result in its window, so a machine where something
 # else won the registration says so instead of failing quietly.
 #
@@ -43,12 +43,13 @@ ditto "$BUILT_APP" "$STAGE/$APP_NAME/$APP_NAME.app"
 ln -s /Applications "$STAGE/$APP_NAME/Applications"
 
 cat > "$STAGE/$APP_NAME/Read me first.txt" <<'TEXT'
-EBookQL — Quick Look previews and thumbnails for EPUB, MOBI, AZW and AZW3
+EBookQL — Quick Look previews and thumbnails for EPUB, MOBI, AZW, AZW3, FictionBook,
+DjVu and CBZ books, and for Markdown.
 
 1. Drag EBookQL onto the "Applications" folder in this window.
 2. Open EBookQL from the Applications folder. Once is enough: opening it registers
    its Quick Look extensions, and the window shows whether they are live.
-3. Select a book in the Finder and press Space.
+3. Select a book, a scan, a comic or a Markdown file in the Finder and press Space.
 
 If nothing appears, or the window says an extension is "switched off", enable it in
 System Settings ▸ General ▸ Login Items & Extensions ▸ Quick Look, then reopen the

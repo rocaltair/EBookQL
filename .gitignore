@@ -20,3 +20,6 @@ DESIGN.md
 # Releases
 dist/*.zip
 dist/*.dmg
+
+# Agent runtime state (session/continuation files), a working-copy artifact only.
+.omo/

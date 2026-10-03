@@ -167,10 +167,13 @@ public struct ReaderDocument {
                     <button id="zoom-level" type="button" title="Back to 100%">100%</button>
                     <button id="zoom-in" type="button" title="Larger text">A+</button>
                 </span>
+                <button id="toc-fold-toggle" type="button" title="Fold all">▸▸</button>
                 <button id="toc-hide" type="button" title="Hide">‹</button>
             </div>
-            \(note)
-            <ul class="toc-list">\(list)</ul>
+            <div id="toc-scroll">
+                \(note)
+                <ul class="toc-list">\(list)</ul>
+            </div>
         </nav>
         <div id="toc-resizer" role="separator" aria-orientation="vertical" title="Drag to resize"></div>
         <button id="toc-show" type="button" title="Show">\(heading)</button>

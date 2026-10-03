@@ -57,9 +57,13 @@ enum ReaderAssets {
     #toc {
         position: fixed; inset-block: 0; inset-inline-start: 0; z-index: 1;
         width: var(--toc-width); box-sizing: border-box;
+        /* The heading (title + text-size buttons + hide) must not scroll away with the
+           entries, so the column is a flex stack: #toc-head stays put and only
+           #toc-scroll gives. */
+        display: flex; flex-direction: column; overflow: hidden;
         /* em, not px: the sidebar's own size never changes, so its padding should not
            either - only the book's text is scaled (see ekbSetZoom). */
-        overflow-y: auto; padding: .96em .64em 1.92em .64em;
+        padding: .96em .64em 1.92em .64em;
         /* Opaque on purpose: a translucent sidebar lets the text selection painted
            underneath tint the whole column. */
         background: var(--toc-bg);
@@ -68,19 +72,25 @@ enum ReaderAssets {
         -webkit-user-select: none; user-select: none;
     }
     #toc-head {
+        flex: 0 0 auto;
         display: flex; align-items: center; justify-content: space-between; gap: .48em;
         font-weight: 600; font-size: .88em; letter-spacing: .08em; text-transform: uppercase;
         opacity: .55; padding: .32em .64em .64em .64em;
     }
+    /* Only the entries scroll; the heading above never moves. */
+    #toc-scroll { flex: 1 1 auto; min-height: 0; overflow-y: auto; }
     #toc-head > span:first-child { flex: 1 1 auto; }
     #toc-zoom { display: flex; align-items: center; gap: .24em; text-transform: none; letter-spacing: 0; }
-    #toc-zoom button, #toc-hide, #toc-show {
+    #toc-zoom button, #toc-fold-toggle, #toc-hide, #toc-show {
         font: inherit; font-size: .88em; cursor: pointer; border: 1px solid var(--toc-border);
         background: var(--toc-bg); color: inherit; border-radius: .48em;
         padding: .08em .4em; opacity: .75;
     }
-    #toc-zoom button:hover, #toc-hide:hover, #toc-show:hover { opacity: 1; background: var(--hover-bg); }
+    #toc-zoom button:hover, #toc-fold-toggle:hover, #toc-hide:hover, #toc-show:hover { opacity: 1; background: var(--hover-bg); }
     #toc-zoom #zoom-level { min-width: 2.88em; text-align: center; font-variant-numeric: tabular-nums; }
+    /* One button, two states: ▸▸ folds everything, ▾▾ opens everything. Kept narrow so
+       title + A−/100%/A+ + this + hide all fit beside the title. */
+    #toc-fold-toggle { padding: .08em .3em; font-size: .8em; letter-spacing: -.06em; }
     #toc-show {
         position: fixed; z-index: 1; top: .8em; inset-inline-start: .8em; display: none;
         font-size: 12.5px;
@@ -263,6 +273,7 @@ enum ReaderAssets {
         }
 
         var toc = document.getElementById('toc');
+        var tocScroll = document.getElementById('toc-scroll');
         var hideButton = document.getElementById('toc-hide');
         var showButton = document.getElementById('toc-show');
         if (hideButton) {
@@ -287,6 +298,33 @@ enum ReaderAssets {
                     dropLayout();
                 });
             });
+            /* One button, two states: fold everything / open everything. The decision
+               reads the list's real state on each click rather than tracking a cached
+               flag - the highlight already re-opens a branch as the book scrolls, so a
+               cached flag would drift out of sync with what is on screen. */
+            var foldToggle = document.getElementById('toc-fold-toggle');
+            function anyExpanded() {
+                var items = toc.querySelectorAll('li.has-children');
+                for (var i = 0; i < items.length; i++) {
+                    if (!items[i].classList.contains('collapsed')) { return true; }
+                }
+                return false;
+            }
+            function reflectFoldState() {
+                if (!foldToggle) { return; }
+                var expanded = anyExpanded();
+                foldToggle.textContent = expanded ? '▸▸' : '▾▾';
+                foldToggle.title = expanded ? 'Fold all' : 'Unfold all';
+            }
+            function setAllCollapsed(collapsed) {
+                toc.querySelectorAll('li.has-children').forEach(function (item) {
+                    item.classList.toggle('collapsed', collapsed);
+                });
+                reflectFoldState();
+            }
+            if (foldToggle) {
+                foldToggle.addEventListener('click', function () { setAllCollapsed(anyExpanded()); });
+            }
             toc.querySelectorAll('li.has-children > a').forEach(function (link) {
                 link.addEventListener('click', function () {
                     link.parentElement.classList.remove('collapsed');
@@ -296,6 +334,7 @@ enum ReaderAssets {
             toc.querySelectorAll('li.has-children').forEach(function (item) {
                 if (item.parentElement.closest('li')) { item.classList.add('collapsed'); }
             });
+            reflectFoldState();
             /* Clicking an entry must not scroll the list itself: WebKit scrolls a
                focused link into view, which hides the rest of the contents. */
             toc.addEventListener('mousedown', function (event) {
@@ -551,7 +590,7 @@ enum ReaderAssets {
 
         var current = null;
         function updateCurrent() {
-            if (!toc) { return; }
+            if (!toc || !tocScroll) { return; }
             /* The entry to highlight is the last one whose target sits at or above the
                reading line. Read fresh on every call: a list of positions goes stale as
                sections below the fold get laid out, and a stale one highlights the wrong
@@ -568,29 +607,49 @@ enum ReaderAssets {
             });
             if (current === match) { return; }
             if (current) { current.parentElement.classList.remove('current'); }
+
+            /* The branches kept open for an entry: its own ancestors, up to the tree
+               root. Used both to open the new entry's chain and to work out which
+               branches the old entry was holding open on its own. */
+            function ancestorsOf(element) {
+                var out = [];
+                for (var node = element.parentElement; node && node !== toc; node = node.parentElement) {
+                    if (node.classList && node.classList.contains('toc-item')) { out.push(node); }
+                }
+                return out;
+            }
+
+            var previous = current;
             current = match;
             if (!current) { return; }
 
             var item = current.parentElement;
+            var nowKeep = ancestorsOf(item);
             item.classList.add('current');
-            /* Its part has to be unfolded, or what is highlighted cannot be seen. */
-            var parent = item.parentElement;
-            while (parent && parent !== toc) {
-                if (parent.classList && parent.classList.contains('toc-item')) {
-                    parent.classList.remove('collapsed');
-                }
-                parent = parent.parentElement;
+            /* Open the new entry's chain, or what is highlighted cannot be seen. */
+            nowKeep.forEach(function (branch) { branch.classList.remove('collapsed'); });
+
+            /* And fold back only what the previous entry was holding open on its own.
+               The chain it shared with the new entry stays open; a branch the reader
+               opened by hand and is still looking at is not touched. Strict follow-fold
+               (collapse everything not in the current chain) was tried and reverted:
+               it folded branches the reader had deliberately opened. */
+            if (previous) {
+                ancestorsOf(previous.parentElement).forEach(function (branch) {
+                    if (nowKeep.indexOf(branch) === -1) { branch.classList.add('collapsed'); }
+                });
             }
-            /* Bring it into view. Measured against the sidebar itself: offsetTop is relative
-               to the nearest positioned ancestor, and `.toc-item` is positioned, so a nested
-               entry's offsetTop is its distance from the entry above it, not from the list
-               top. Compared against toc.scrollTop, that number pins the sidebar near its
-               top while the highlighted entry sits hundreds of pixels below - on screen it
-               looks like the list never follows the book. */
-            var box = toc.getBoundingClientRect();
-            var top = item.getBoundingClientRect().top - box.top + toc.scrollTop;
-            if (top < toc.scrollTop || top + item.offsetHeight > toc.scrollTop + toc.clientHeight) {
-                toc.scrollTop = Math.max(0, top - toc.clientHeight / 3);
+            reflectFoldState();
+            /* Bring it into view. Measured against the scrolling list itself: offsetTop is
+               relative to the nearest positioned ancestor, and `.toc-item` is positioned, so
+               a nested entry's offsetTop is its distance from the entry above it, not from
+               the list top. Compared against tocScroll.scrollTop, that number pins the list
+               near its top while the highlighted entry sits hundreds of pixels below - on
+               screen it looks like the list never follows the book. */
+            var box = tocScroll.getBoundingClientRect();
+            var top = item.getBoundingClientRect().top - box.top + tocScroll.scrollTop;
+            if (top < tocScroll.scrollTop || top + item.offsetHeight > tocScroll.scrollTop + tocScroll.clientHeight) {
+                tocScroll.scrollTop = Math.max(0, top - tocScroll.clientHeight / 3);
             }
         }
 

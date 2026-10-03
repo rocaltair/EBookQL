@@ -166,6 +166,25 @@ final class FB2Document: NSObject, XMLParserDelegate {
     private var titles = 0
     private let contentsFromText: Bool
 
+    /// A section as it is written: where it starts in `out`, how deep it is, how many ordinary
+    /// paragraphs it holds and where its first one begins. A converted file keeps all of this
+    /// even when every `<title>` element was dropped, which is what tells a guessed chapter
+    /// title (the section's first paragraph) from a guessed subheading - and what gives a flat
+    /// file a tree at all.
+    private struct SectionMark {
+        var start: Int
+        var depth: Int
+        var paragraphs = 0
+        var firstParagraph: Int?
+    }
+    /// Written in document order, so the innermost section holding an offset is the last one
+    /// that starts at or before it.
+    private var sectionMarks: [SectionMark] = []
+    /// Indices into `sectionMarks` of the sections that are still open.
+    private var openSections: [Int] = []
+    /// Where the paragraph being written began, for the first-paragraph rule above.
+    private var paragraphStart: Int?
+
     private init(markupLimit: Int, binaryLimit: Int, stopAfterFirstSection: Bool, contentsFromText: Bool) {
         self.markupLimit = markupLimit
         self.binaryLimit = binaryLimit
@@ -180,7 +199,7 @@ final class FB2Document: NSObject, XMLParserDelegate {
         // Only ever for a file that carries no structure of its own. A book with `<title>`
         // elements keeps exactly the contents its author gave it - nothing guessed is mixed in.
         if contentsFromText, titles == 0 {
-            (html, entries) = Self.promotedContents(html)
+            (html, entries) = Self.promotedContents(html, sections: sectionMarks)
             guessed = entries > 0
         }
         return Result(metadata: metadata, html: html, binaries: binaries, coverID: coverID,
@@ -347,6 +366,8 @@ final class FB2Document: NSObject, XMLParserDelegate {
         case "section":
             sectionDepth += 1
             sections += 1
+            sectionMarks.append(SectionMark(start: out.utf16.count, depth: sectionDepth))
+            openSections.append(sectionMarks.count - 1)
             out += "<div class=\"fb2-section\"\(Self.idAttribute(attributes))>"
         case "title":
             titles += 1
@@ -363,6 +384,7 @@ final class FB2Document: NSObject, XMLParserDelegate {
                 if titleParagraphs > 1 { out += "<br>" }
             } else {
                 paragraphDepth += 1
+                paragraphStart = out.utf16.count
                 out += "<p\(Self.idAttribute(attributes))>"
             }
         case "v":
@@ -418,6 +440,7 @@ final class FB2Document: NSObject, XMLParserDelegate {
         case "section":
             out += "</div>"
             sectionDepth = max(0, sectionDepth - 1)
+            _ = openSections.popLast()
             if sectionDepth == 0 { checkLimits() }
         case "title":
             out += quoting > 0 ? "</p>" : "</h\(titleLevel)>"
@@ -425,6 +448,14 @@ final class FB2Document: NSObject, XMLParserDelegate {
         case "subtitle": out += "</p>"
         case "p":
             if inTitle { break }
+            // The section this paragraph belongs to is the innermost one still open.
+            if let start = paragraphStart, let section = openSections.last {
+                sectionMarks[section].paragraphs += 1
+                if sectionMarks[section].firstParagraph == nil {
+                    sectionMarks[section].firstParagraph = start
+                }
+            }
+            paragraphStart = nil
             paragraphDepth = max(0, paragraphDepth - 1)
             out += "</p>"
         case "v":
@@ -470,90 +501,206 @@ final class FB2Document: NSObject, XMLParserDelegate {
 
     // MARK: - Guessed contents
 
+    /// A paragraph short enough to be a heading, with the section it sits in.
+    private struct Candidate {
+        let range: NSRange
+        let attributes: String
+        let inner: String
+        /// `inner` with its tags stripped, lowercased: what the entry would be called, computed
+        /// once because every tier compares it.
+        let label: String
+        /// Index into `SectionMark`s, or nil for text outside every section.
+        let section: Int?
+    }
+
     /// Turns paragraphs that read like headings into real ones, so the renderer's own heading
     /// derivation can build a sidebar for a book whose `<title>` elements are all missing.
     ///
-    /// Every FB2 file the popular converters produce has this shape: the source's headings were
-    /// flattened into ordinary `<p>` elements and the structure survives only as text. Two
-    /// tiers, in this order:
+    /// The file's own section boundaries are the spine, because they are the one piece of
+    /// structure a converter cannot flatten away - every FB2 file has them, titles or not:
     ///
-    /// 1. **Explicit**: the paragraph names its own level - "Part II …", "Chapter 4 …",
-    ///    "Appendix", "Глава 1", "Kapitel 3".
-    /// 2. **Fallback**, and only when tier 1 found fewer than three entries: a paragraph that
-    ///    is nothing but one bold (or emphasised) run. Measured on a real 2.4 MB book (4167
-    ///    paragraphs, 0 titles): tier 1 found its three Parts and nine Chapters cleanly, while
-    ///    205 paragraphs are "entirely bold" and include the front matter's series and author
-    ///    lists - hence the fallback, and hence the sidebar saying the contents were guessed.
+    /// 1. A section's **first paragraph** is that section's title, at the level its `<title>`
+    ///    would have had. Measured on `sample.fb2` (13 equal sections, 0 titles): all ten of its
+    ///    chapters open with exactly that line, so the tree comes out two levels deep, which is
+    ///    the book's own shape.
+    /// 2. A paragraph that **names its own level** ("Part II …", "Chapter 4 …", "Appendix",
+    ///    "Глава 1", "Kapitel 3") is a heading at that level. This is what carries a book whose
+    ///    sections are few and huge: 《AI for Physics》has three sections of ~2000 paragraphs,
+    ///    one of them a flattened table of contents.
+    /// 3. Failing both, a paragraph that is **nothing but one bold run** is a subheading - looked
+    ///    at only once 1-2 found fewer than three entries, because the same files bold their
+    ///    series lists and author names too (205 such paragraphs in the measured book).
     ///
-    /// The caller only runs this when the file has no `<title>` at all, and the setting that
-    /// enables it is on by default (see ReaderDocument and the host window's FB2 tab).
-    static func promotedContents(_ html: String) -> (html: String, entries: Int) {
-        // One entry per label, case-insensitively: these files carry the same marker twice with
-        // different casing ("Part I …" and "PArt i", "Conclusion and Outlook" and "ConCLusion
-        // And outLook" in the measured book), and neither is a heading the reader wants twice.
+    /// The callers only run this for a file with no `<title>` at all, and the reader is told the
+    /// result was guessed (`Book.tocNote`).
+    private static func promotedContents(_ html: String, sections: [SectionMark]) -> (html: String, entries: Int) {
+        let candidates = paragraphCandidates(in: html, sections: sections)
+        let contentsSections = contentsLikeSections(candidates, sections)
+
         var seen: Set<String> = []
-        let (promoted, explicit) = promoteParagraphs(html, seen: &seen)
-        guard explicit >= 3 else {
-            let (withBold, bold) = promoteBoldParagraphs(promoted, seen: &seen)
-            return (withBold, explicit + bold)
-        }
-        return (promoted, explicit)
-    }
+        var edits: [(range: NSRange, text: String)] = []
+        var deferred: [Candidate] = []
+        var named = 0
+        var sectionTitles = 0
 
-    /// Whole paragraphs whose entire text is a heading and nothing else.
-    private static func promoteParagraphs(_ html: String, seen: inout Set<String>) -> (html: String, entries: Int) {
-        var entries = 0
-        let out = html.replacingOccurrences(of: #"<p([^>]*)>([^<]{2,120})</p>"#) { match, matched in
-            guard match.numberOfRanges >= 3 else { return matched }
-            let source = matched as NSString
-            // A capture group's range is in the *document's* coordinates while `matched` is only
-            // the matched substring, so it has to be rebased first (see HTMLNormalizer).
-            let attributes = source.substring(with: HTMLNormalizer.rangeWithinMatch(match.range(at: 1), match.range))
-            let text = source.substring(with: HTMLNormalizer.rangeWithinMatch(match.range(at: 2), match.range))
-            guard let level = guessedLevel(for: text) else { return matched }
-            guard seen.insert(HTMLNormalizer.collapsedText(text).lowercased()).inserted else { return matched }
-            entries += 1
-            return "<h\(level)\(attributes)>\(text)</h\(level)>"
+        // 1. Each section's own title. The only tier that is not reading the text for meaning -
+        //    it is the file's structure - which is why it runs first and why what it finds
+        //    decides how the two text tiers below are used.
+        for candidate in candidates {
+            guard let section = candidate.section.map({ sections[$0] }),
+                  section.firstParagraph == candidate.range.location, section.paragraphs >= 3,
+                  !candidate.label.isEmpty, passesCommonGuards(candidate.label, limit: titleLengthLimit),
+                  seen.insert(candidate.label).inserted else { continue }
+            let level = min(max(section.depth, 1), FB2Backend.titleLevelLimit)
+            edits.append((candidate.range, heading(level: level, attributes: candidate.attributes, inner: candidate.inner)))
+            named += 1
+            sectionTitles += 1
         }
-        return (out, entries)
-    }
 
-    /// The fallback tier. Runs one element at a time so the pattern needs no backreference.
-    private static func promoteBoldParagraphs(_ html: String, seen: inout Set<String>) -> (html: String, entries: Int) {
-        var out = html
-        var entries = 0
-        for tag in ["strong", "emphasis"] {
-            out = out.replacingOccurrences(of: "<p([^>]*)><\(tag)>([^<]{2,80})</\(tag)></p>") { match, matched in
-                guard match.numberOfRanges >= 3 else { return matched }
-                let source = matched as NSString
-                let attributes = source.substring(with: HTMLNormalizer.rangeWithinMatch(match.range(at: 1), match.range))
-                let text = source.substring(with: HTMLNormalizer.rangeWithinMatch(match.range(at: 2), match.range))
-                guard guessedLevel(for: text) == nil, looksLikeHeading(text) else { return matched }
-                guard seen.insert(HTMLNormalizer.collapsedText(text).lowercased()).inserted else { return matched }
-                entries += 1
-                return "<h2\(attributes)><\(tag)>\(text)</\(tag)></h2>"
+        // A file whose sections carry titles does not need its table of contents read as headings:
+        // those lines point at the entries above and would duplicate every one of them (measured on
+        // `sample.fb2`, whose contents page is ten bold chapter titles). A file whose sections
+        // carry none has nothing else - 《AI for Physics》is three 2000-paragraph sections and one
+        // flattened outline, so that outline *is* its structure.
+        let readsContentsBlocks = sectionTitles < 3
+
+        // 2. A paragraph that names its own level.
+        for candidate in candidates {
+            if let section = candidate.section, contentsSections.contains(section), !readsContentsBlocks { continue }
+            guard !candidate.label.isEmpty, let level = guessedLevel(label: candidate.label),
+                  seen.insert(candidate.label).inserted else { continue }
+            edits.append((candidate.range, heading(level: level, attributes: candidate.attributes, inner: candidate.inner)))
+            named += 1
+        }
+
+        // 3. Everything still spare is a candidate for the bold tier, whose gate is the count
+        //    tier 2 produced (tier 1's entries are structure, not evidence either way). The bold
+        //    test is made here rather than for every paragraph, since this tier usually does not
+        //    run at all.
+        for candidate in candidates {
+            if let section = candidate.section, contentsSections.contains(section), !readsContentsBlocks { continue }
+            guard !candidate.label.isEmpty, !seen.contains(candidate.label),
+                  isOneBoldRun(candidate.inner) else { continue }
+            deferred.append(candidate)
+        }
+        if named - sectionTitles < 3 {
+            for candidate in deferred {
+                guard seen.insert(candidate.label).inserted else { continue }
+                edits.append((candidate.range, heading(level: 2, attributes: candidate.attributes, inner: candidate.inner)))
             }
         }
-        return (out, entries)
+
+        // Applied back to front so the ranges stay valid: the section lookups above are in the
+        // coordinates of the unedited document, and a String rewritten as we go would shift them.
+        let out = NSMutableString(string: html)
+        for edit in edits.sorted(by: { $0.range.location > $1.range.location }) {
+            out.replaceCharacters(in: edit.range, with: edit.text)
+        }
+        return (out as String, edits.count)
     }
 
+    private static func heading(level: Int, attributes: String, inner: String) -> String {
+        "<h\(level)\(attributes)>\(inner)</h\(level)>"
+    }
+
+    /// Every paragraph short enough to be a heading, in document order, with the section it sits
+    /// in. Paragraphs the backend already styled (`<p class="fb2-…">`: subtitles, verses, a
+    /// quotation's author) are skipped - the book's structure is not written there.
+    private static func paragraphCandidates(in html: String, sections: [SectionMark]) -> [Candidate] {
+        let source = html as NSString
+        let found = paragraphPattern.matches(in: html, range: NSRange(location: 0, length: source.length))
+        var out: [Candidate] = []
+        out.reserveCapacity(found.count)
+        for match in found {
+            guard match.numberOfRanges >= 3 else { continue }
+            let attributes = source.substring(with: match.range(at: 1))
+            guard !attributes.contains("class=\"fb2-") else { continue }
+            let inner = source.substring(with: match.range(at: 2))
+            out.append(Candidate(
+                range: match.range,
+                attributes: attributes,
+                inner: inner,
+                label: HTMLNormalizer.collapsedText(inner).lowercased(),
+                section: sectionIndex(at: match.range.location, in: sections)
+            ))
+        }
+        return out
+    }
+
+    /// The innermost section containing `offset`: the last one that starts at or before it, since
+    /// a nested section always starts after its parent.
+    private static func sectionIndex(at offset: Int, in sections: [SectionMark]) -> Int? {
+        var low = 0
+        var high = sections.count - 1
+        var found: Int?
+        while low <= high {
+            let mid = (low + high) / 2
+            if sections[mid].start <= offset {
+                found = mid
+                low = mid + 1
+            } else {
+                high = mid - 1
+            }
+        }
+        return found
+    }
+
+    /// Sections that *are* a table of contents ("Contents", "Document Outline", "Оглавление").
+    /// Their lines are references to the real headings, so promoting them duplicates the whole
+    /// tree - measured on `sample.fb2`, whose contents page is ten bold lines that would otherwise
+    /// double every chapter entry. Only honoured once the sections themselves gave titles: in
+    /// 《AI for Physics》the flattened contents *is* the book's structure and the only thing there
+    /// is to read.
+    private static func contentsLikeSections(_ candidates: [Candidate], _ sections: [SectionMark]) -> Set<Int> {
+        var out: Set<Int> = []
+        for candidate in candidates {
+            guard let index = candidate.section,
+                  sections[index].firstParagraph == candidate.range.location else { continue }
+            if contentsTitles.contains(HTMLNormalizer.collapsedText(candidate.inner).lowercased()) {
+                out.insert(index)
+            }
+        }
+        return out
+    }
+
+    private static let contentsTitles: Set<String> = [
+        "contents", "table of contents", "document outline", "оглавление", "содержание",
+    ]
+
+    /// A whole paragraph, tags and all, up to the length a heading can be. Longer paragraphs are
+    /// prose and simply do not match - which is also what keeps this affordable on a big book.
+    private static let paragraphPattern = try! NSRegularExpression(
+        pattern: #"<p([^>]*)>(.{2,240}?)</p>"#, options: [.dotMatchesLineSeparators]
+    )
+
+    /// How the converters in circulation mark a heading once the `<title>` element is gone: the
+    /// paragraph is one bold run and nothing else.
+    private static func isOneBoldRun(_ text: String) -> Bool {
+        matches(boldOnlyPattern, HTMLNormalizer.collapsedText(text))
+    }
+
+    private static let boldOnlyPattern = try! NSRegularExpression(
+        pattern: #"^\s*<(strong|emphasis)>.{2,80}</(strong|emphasis)>\s*$"#
+    )
+
     /// The heading level a paragraph's own text claims, or nil. A part is a top level entry and
-    /// everything else sits under it, which is the shape these books have.
-    static func guessedLevel(for text: String) -> Int? {
-        let value = HTMLNormalizer.collapsedText(text)
-        guard looksLikeHeading(text) else { return nil }
-        for (pattern, level) in headingPatterns where matches(pattern, value) { return level }
+    /// everything else sits under it, which is the shape these books have. `label` is the
+    /// caller's already-collapsed text, so this does no string work of its own.
+    static func guessedLevel(label: String) -> Int? {
+        guard passesCommonGuards(label, limit: headingLengthLimit) else { return nil }
+        for (pattern, level) in headingPatterns where matches(pattern, label) { return level }
         return nil
     }
 
-    /// What a heading looks like, regardless of language: short, no sentence punctuation at the
-    /// end, not a URL or an address, and not a running head. A cross-reference reads a lot like
-    /// a heading ("Chapter 6.", "Chapter 8).") and is exactly what this has to keep out - the
-    /// real book contains both.
-    static func looksLikeHeading(_ text: String) -> Bool {
-        let value = HTMLNormalizer.collapsedText(text)
-        guard value.count >= 3, value.count <= 80 else { return false }
-        guard let last = value.last, !".),;:".contains(last) else { return false }
+    /// Where the text itself is the evidence, a heading is short: "Chapter 6." and "Chapter 8)."
+    /// are cross-references to a chapter, not headings, and a sentence is prose. That is what
+    /// these limits are for; the section-title tier has its own, looser one above.
+    private static let headingLengthLimit = 80
+    private static let titleLengthLimit = 140
+
+    private static func passesCommonGuards(_ value: String, limit: Int) -> Bool {
+        guard value.count >= 3, value.count <= limit else { return false }
+        guard let last = value.last, !".,;".contains(last) else { return false }
         guard !value.contains("http"), !value.contains("@"), !value.contains("://") else { return false }
         guard !matches(runningHeadPattern, value) else { return false }
         // "Epilogue 113", "Appendix 12": a front/back-matter word *followed by nothing but a

@@ -242,7 +242,7 @@ final class ReaderPreviewProvider: NSViewController, QLPreviewingController, WKN
 
     /// Parses the book and builds the page. Runs off the main thread.
     private static func render(url: URL, workDirectory: URL, options: ReaderDocument.Options) throws -> Rendered {
-        guard let backend = BookOpener.backend(for: url) else {
+        guard BookOpener.backend(for: url) != nil else {
             return Rendered(html: ReaderDocument.placeholderHTML(fileName: url.lastPathComponent, options: options),
                             resources: nil, sections: 0, title: nil, author: nil)
         }

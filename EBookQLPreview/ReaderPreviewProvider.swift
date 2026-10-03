@@ -172,10 +172,10 @@ final class ReaderPreviewProvider: NSViewController, QLPreviewingController, WKN
         // Stop Finder's spinner promptly; the page fills in after.
         completionHandler(nil)
 
-        // The markdown preferences are read once and shared by the parse and the page:
-        // they decide whether the backend renders the markup and whether the page may
-        // fetch its math/diagram assets. Every other format keeps the defaults.
-        let preferences = Self.isMarkdown(url) ? ReaderPreferences.load() : nil
+        // The settings file is written by the host into this appex's own container. Markdown
+        // reads most of it; FB2 reads one key (whether a book with no titles may have its
+        // contents guessed). Every other format keeps the defaults.
+        let preferences = Self.readsSettings(url) ? ReaderPreferences.load() : nil
 
         let options = ReaderDocument.Options(
             readingPosition: savedPosition,
@@ -183,6 +183,7 @@ final class ReaderPreviewProvider: NSViewController, QLPreviewingController, WKN
             autoFoldTOC: Self.storedAutoFold,
             zoom: Double(zoom),
             allowNetworkImages: preferences?.allowNetworkImages ?? false,
+            fb2ContentsFromText: preferences?.fb2ContentsFromText ?? true,
             tocTitle: ReaderDocument.localizedTOCTitle(),
             theme: preferences.map { Self.resolvedTheme($0.theme) } ?? .system,
             markdownRendering: preferences?.jsParse ?? true,
@@ -246,12 +247,17 @@ final class ReaderPreviewProvider: NSViewController, QLPreviewingController, WKN
                             resources: nil, sections: 0, title: nil, author: nil)
         }
         let t0 = Date()
-        // Markdown carries the reader's rendering choice into the parse (it decides
-        // between the rendered page and the raw source); every other backend keeps the
-        // two-argument call it has always used.
-        let book = Self.isMarkdown(url)
-            ? try BookOpener.open(url, workDirectory: workDirectory, markdownRendering: options.markdownRendering)
-            : try backend.open(url, workDirectory: workDirectory)
+        // One call for every format: the facade picks the backend by extension and hands each
+        // one only what it understands - `markdownRendering` reaches Markdown alone (it decides
+        // between the rendered page and the raw source) and `contentsFromText` reaches FB2 alone
+        // (whether a file with no `<title>` may have its contents guessed). EPUB/MOBI keep the
+        // two-argument call they have always used.
+        let book = try BookOpener.open(
+            url,
+            workDirectory: workDirectory,
+            markdownRendering: options.markdownRendering,
+            contentsFromText: options.fb2ContentsFromText
+        )
         let t1 = Date()
         let page = try ReaderDocument.build(book, options: options)
         let t2 = Date()
@@ -268,6 +274,13 @@ final class ReaderPreviewProvider: NSViewController, QLPreviewingController, WKN
     /// backend, so the parse and the page options agree on one decision.
     private static func isMarkdown(_ url: URL) -> Bool {
         MarkdownBackend.supportedExtensions.contains(url.pathExtension.lowercased())
+    }
+
+    /// The formats that read `settings.json`. The book appex wants the FB2 key even though it
+    /// is not the Markdown one; the Markdown appex never sees an FB2 file, and neither appex
+    /// pays for a settings read for EPUB/MOBI.
+    private static func readsSettings(_ url: URL) -> Bool {
+        isMarkdown(url) || FB2Backend.supportedExtensions.contains(url.pathExtension.lowercased())
     }
 
     /// `.system` becomes a concrete scheme from the appex's own appearance, because the

@@ -26,12 +26,17 @@ struct ReaderPreferences: Codable {
     /// the reader turned it on in the host window; EPUB/MOBI ignore it and never
     /// load remote images.
     var allowNetworkImages: Bool = false
+    /// Whether an FB2 file with no `<title>` elements at all may have its contents
+    /// guessed from the text. On unless the reader turned it off in the host window;
+    /// every other format ignores it.
+    var fb2ContentsFromText: Bool = true
 
     enum CodingKeys: String, CodingKey {
         case jsParse
         case theme
         case showLineNumbers
         case allowNetworkImages
+        case fb2ContentsFromText
     }
 
     init() {}
@@ -46,6 +51,7 @@ struct ReaderPreferences: Codable {
         theme = try container.decodeIfPresent(MarkdownTheme.self, forKey: .theme) ?? .system
         showLineNumbers = try container.decodeIfPresent(Bool.self, forKey: .showLineNumbers) ?? false
         allowNetworkImages = try container.decodeIfPresent(Bool.self, forKey: .allowNetworkImages) ?? false
+        fb2ContentsFromText = try container.decodeIfPresent(Bool.self, forKey: .fb2ContentsFromText) ?? true
     }
 
     static func load() -> ReaderPreferences {

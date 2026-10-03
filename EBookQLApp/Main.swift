@@ -39,6 +39,8 @@ struct ContentView: View {
                     .tabItem { Label("General", systemImage: "gearshape") }
                 markdownSettings
                     .tabItem { Label("Markdown", systemImage: "doc.richtext") }
+                fb2Settings
+                    .tabItem { Label("FB2", systemImage: "book.closed") }
             }
             .frame(minWidth: 560, minHeight: 380)
         }
@@ -173,6 +175,40 @@ struct ContentView: View {
             }
         }
         .formStyle(.grouped)
+    }
+
+    // MARK: - FB2 tab
+
+    /// FictionBook's one choice. It exists because the converters in circulation drop every
+    /// `<title>` element: the structure of those files survives only as text, so a book arrives
+    /// with nothing for the sidebar to be built from.
+    @ViewBuilder private var fb2Settings: some View {
+        Form {
+            Section {
+                Toggle("Guess the contents from the text", isOn: fb2ContentsBinding)
+                    .help("Only ever used for a book that has no chapter titles at all — which is what .fb2 files from the usual converters look like. Their headings survive as text (\"Chapter 4 …\", \"Part II …\", or a bold line of its own) and are read back as headings. A book that has titles is never touched, whatever this is set to.")
+            } header: {
+                Text("Contents")
+            } footer: {
+                Text("Only affects FB2 files without chapter titles. The sidebar says when the contents were guessed.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .formStyle(.grouped)
+    }
+
+    private var fb2ContentsBinding: Binding<Bool> {
+        Binding(
+            get: { settings.fb2ContentsFromText },
+            set: { newValue in
+                var updated = settings
+                updated.fb2ContentsFromText = newValue
+                settings = updated
+                SettingsStore.write(updated)
+            }
+        )
     }
 
     private var jsParseBinding: Binding<Bool> {

@@ -67,10 +67,22 @@ public enum BookOpener {
     }
 
     /// Parses `url` with the backend for its format, forwarding the preview's
-    /// markdown-rendering choice. Throws `unsupportedFormat` when no backend claims
-    /// the file, so callers get the same error the backends raise.
+    /// markdown-rendering choice. Throws `unsupportedFormat` when no backend claims the
+    /// file, so callers get the same error the backends raise.
     public static func open(_ url: URL, workDirectory: URL, markdownRendering: Bool) throws -> Book {
+        try open(url, workDirectory: workDirectory, markdownRendering: markdownRendering,
+                 contentsFromText: false)
+    }
+
+    /// The one format-specific knob in this facade: only FB2 offers a choice about where its
+    /// contents come from, because only FB2 files are routinely converted with every `<title>`
+    /// element dropped. No other backend looks at it, and a book that has titles keeps them.
+    public static func open(_ url: URL, workDirectory: URL, markdownRendering: Bool,
+                            contentsFromText: Bool) throws -> Book {
         guard let backend = backend(for: url) else { throw BookParseError.unsupportedFormat }
+        if let fb2 = backend as? FB2Backend.Type {
+            return try fb2.open(url, workDirectory: workDirectory, contentsFromText: contentsFromText)
+        }
         return try backend.open(url, workDirectory: workDirectory, markdownRendering: markdownRendering)
     }
 }

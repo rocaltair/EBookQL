@@ -130,6 +130,9 @@ public struct Book {
     public let truncatedAt: Int?
     /// Byte count of the book's whole text, for the "showing the first X of Y" note.
     public let contentBytes: Int?
+    /// One line the sidebar shows above the entries, when the reader has to be told something
+    /// about where they came from (FB2's guessed contents; nothing else uses it yet).
+    public let tocNote: String?
 
     public init(
         url: URL,
@@ -141,7 +144,8 @@ public struct Book {
         resources: ResourceProvider? = nil,
         truncatedAt: Int? = nil,
         contentBytes: Int? = nil,
-        tocIsFallback: Bool = false
+        tocIsFallback: Bool = false,
+        tocNote: String? = nil
     ) {
         self.url = url
         self.format = format
@@ -153,6 +157,7 @@ public struct Book {
         self.truncatedAt = truncatedAt
         self.contentBytes = contentBytes
         self.tocIsFallback = tocIsFallback
+        self.tocNote = tocNote
     }
 }
 

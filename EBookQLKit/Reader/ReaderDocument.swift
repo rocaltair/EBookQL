@@ -26,6 +26,10 @@ public struct ReaderDocument {
         /// unless the reader turned it on in the host window; only Markdown is given
         /// the choice, and every other format's page never loads one.
         public var allowNetworkImages: Bool
+        /// Whether an FB2 file with no `<title>` elements may have its contents guessed
+        /// from the text - the host window's FB2 tab, on by default. Only FB2 does
+        /// anything with it; a book that has titles keeps them.
+        public var fb2ContentsFromText: Bool
         /// "Contents" in the user's language.
         public var tocTitle: String
         /// Colour scheme, honoured only by markdown books. Every other format keeps
@@ -44,6 +48,7 @@ public struct ReaderDocument {
             autoFoldTOC: Bool = true,
             zoom: Double = 1.0,
             allowNetworkImages: Bool = false,
+            fb2ContentsFromText: Bool = true,
             tocTitle: String = ReaderDocument.localizedTOCTitle(),
             theme: MarkdownTheme = .system,
             markdownRendering: Bool = true,
@@ -54,6 +59,7 @@ public struct ReaderDocument {
             self.autoFoldTOC = autoFoldTOC
             self.zoom = zoom
             self.allowNetworkImages = allowNetworkImages
+            self.fb2ContentsFromText = fb2ContentsFromText
             self.tocTitle = tocTitle
             self.theme = theme
             self.markdownRendering = markdownRendering
@@ -145,6 +151,7 @@ public struct ReaderDocument {
             title: options.tocTitle,
             truncated: book.truncatedAt,
             totalBytes: book.contentBytes,
+            tocNote: book.tocNote,
             autoFold: options.autoFoldTOC
         )
 
@@ -197,6 +204,7 @@ public struct ReaderDocument {
         title: String,
         truncated: Int?,
         totalBytes: Int?,
+        tocNote: String?,
         autoFold: Bool
     ) -> String? {
         let list = renderList(entries, sectionIndexByPath: sectionIndexByPath)
@@ -207,6 +215,12 @@ public struct ReaderDocument {
             let total = Double(totalBytes ?? truncated) / 1_048_576.0
             note = "<div class=\"toc-note\">Truncated preview: showing the first "
                 + String(format: "%.0f", shown) + " MB of " + String(format: "%.0f", total) + " MB.</div>"
+        }
+        // Whatever the reader has to be told about the entries themselves - that they were
+        // guessed from the text, for instance. Never silently: a derived list that looks like
+        // the book's own structure is the one thing this must not be.
+        if let tocNote, !tocNote.isEmpty {
+            note += "<div class=\"toc-note\">\(HTMLNormalizer.escapeHTML(tocNote))</div>"
         }
         guard !list.isEmpty || !note.isEmpty else { return nil }
 

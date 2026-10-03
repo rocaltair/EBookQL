@@ -46,12 +46,22 @@ public final class FB2Backend: BookBackend {
     static let binaryLimit = 64 * 1024 * 1024
 
     public static func open(_ url: URL, workDirectory: URL) throws -> Book {
+        try open(url, workDirectory: workDirectory, contentsFromText: false)
+    }
+
+    /// `contentsFromText` is the host window's FB2 choice, on by default there: a file with no
+    /// `<title>` elements at all may have its contents guessed from the text. A book that has
+    /// titles keeps them, guessed or not.
+    public static func open(_ url: URL, workDirectory: URL, contentsFromText: Bool) throws -> Book {
         _ = workDirectory
         let started = Date()
 
         let data = try read(url)
         let text = try decode(data)
-        let document = try FB2Document.parse(text, markupLimit: markupLimit, binaryLimit: binaryLimit)
+        let document = try FB2Document.parse(
+            text, markupLimit: markupLimit, binaryLimit: binaryLimit,
+            contentsFromText: contentsFromText
+        )
 
         guard !document.html.isEmpty else { throw BookParseError.malformed }
 
@@ -69,6 +79,10 @@ public final class FB2Backend: BookBackend {
                Date().timeIntervalSince(started), shown,
                document.binaries.count, Double(document.binaryBytes) / 1_048_576.0,
                document.sections, document.truncated ? " | TRUNCATED" : "")
+        if document.guessedContents {
+            os_log("contents guessed from the text: %{public}d entries (the file has no <title>)",
+                   log: log, type: .info, document.guessedEntries)
+        }
 
         return Book(
             url: url,
@@ -82,9 +96,15 @@ public final class FB2Backend: BookBackend {
             resources: FB2ResourceProvider(binaries: document.binaries),
             truncatedAt: document.truncated ? shown : nil,
             contentBytes: total,
-            tocIsFallback: false
+            tocIsFallback: false,
+            // The reader is told the contents were guessed rather than passed them off as the
+            // book's own structure.
+            tocNote: document.guessedContents ? Self.guessedContentsNote : nil
         )
     }
+
+    static let guessedContentsNote =
+        "Contents guessed from the text — this file has no chapter titles of its own."
 
     /// Finder asks for a folder's worth of thumbnails at once, so the parse stops at the end
     /// of the first section: a card needs the title, the author and some opening text.

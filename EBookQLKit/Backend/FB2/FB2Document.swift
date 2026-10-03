@@ -29,6 +29,9 @@ final class FB2Document: NSObject, XMLParserDelegate {
         var binaryBytes: Int
         var sections: Int
         var truncated: Bool
+        /// True when the contents had to be guessed from the text (see `promotedContents`).
+        var guessedContents: Bool
+        var guessedEntries: Int
     }
 
     // MARK: - Entry point
@@ -37,10 +40,12 @@ final class FB2Document: NSObject, XMLParserDelegate {
         _ text: String,
         markupLimit: Int,
         binaryLimit: Int,
-        stopAfterFirstSection: Bool = false
+        stopAfterFirstSection: Bool = false,
+        contentsFromText: Bool = false
     ) throws -> Result {
         let document = FB2Document(markupLimit: markupLimit, binaryLimit: binaryLimit,
-                                   stopAfterFirstSection: stopAfterFirstSection)
+                                   stopAfterFirstSection: stopAfterFirstSection,
+                                   contentsFromText: contentsFromText)
         let parser = XMLParser(data: Data(declarationNormalized(sanitizedEntities(in: text)).utf8))
         parser.delegate = document
         parser.shouldProcessNamespaces = false
@@ -156,16 +161,31 @@ final class FB2Document: NSObject, XMLParserDelegate {
     /// Which part of `<description>` is being read - `title-info`, `document-info`, … - so a
     /// field is only taken from where it means what we want it to mean.
     private var descriptionSection: String?
+    /// How many `<title>` elements the document has. Zero is what allows the contents to be
+    /// guessed from the text at all.
+    private var titles = 0
+    private let contentsFromText: Bool
 
-    private init(markupLimit: Int, binaryLimit: Int, stopAfterFirstSection: Bool) {
+    private init(markupLimit: Int, binaryLimit: Int, stopAfterFirstSection: Bool, contentsFromText: Bool) {
         self.markupLimit = markupLimit
         self.binaryLimit = binaryLimit
         self.stopAfterFirstSection = stopAfterFirstSection
+        self.contentsFromText = contentsFromText
     }
 
     private func result() -> Result {
-        Result(metadata: metadata, html: out, binaries: binaries, coverID: coverID,
-               binaryBytes: binaryBytes, sections: sections, truncated: truncated)
+        var html = out
+        var guessed = false
+        var entries = 0
+        // Only ever for a file that carries no structure of its own. A book with `<title>`
+        // elements keeps exactly the contents its author gave it - nothing guessed is mixed in.
+        if contentsFromText, titles == 0 {
+            (html, entries) = Self.promotedContents(html)
+            guessed = entries > 0
+        }
+        return Result(metadata: metadata, html: html, binaries: binaries, coverID: coverID,
+                      binaryBytes: binaryBytes, sections: sections, truncated: truncated,
+                      guessedContents: guessed, guessedEntries: entries)
     }
 
     // MARK: - Elements
@@ -329,6 +349,7 @@ final class FB2Document: NSObject, XMLParserDelegate {
             sections += 1
             out += "<div class=\"fb2-section\"\(Self.idAttribute(attributes))>"
         case "title":
+            titles += 1
             titleParagraphs = 0
             inTitle = true
             out += quoting > 0
@@ -368,9 +389,12 @@ final class FB2Document: NSObject, XMLParserDelegate {
         case "image":
             guard let id = Self.href(attributes)?.drop(while: { $0 == "#" }), !id.isEmpty else { return }
             let source = "\(BookResourceScheme.name)://\(FB2ResourceProvider.prefix)\(Self.encode(String(id)))"
-            out += paragraphDepth > 0
-                ? "<img src=\"\(source)\" alt=\"\">"
-                : "<img class=\"fb2-image\" src=\"\(source)\" alt=\"\">"
+            // FB2 gives an image `alt`, `title` and `id` (the last one is a link target, so it
+            // has to survive into the page like any other anchor).
+            out += paragraphDepth > 0 ? "<img src=\"\(source)\"" : "<img class=\"fb2-image\" src=\"\(source)\""
+            out += " alt=\"\(HTMLNormalizer.escapeHTML(attributes["alt"] ?? ""))\""
+            if let title = attributes["title"] { out += " title=\"\(HTMLNormalizer.escapeHTML(title))\"" }
+            out += Self.idAttribute(attributes) + ">"
         case "epigraph", "cite":
             quoting += 1
             out += "<blockquote class=\"fb2-\(element)\"\(Self.idAttribute(attributes))>"
@@ -443,6 +467,125 @@ final class FB2Document: NSObject, XMLParserDelegate {
         guard aborted else { return }
         parser?.abortParsing()
     }
+
+    // MARK: - Guessed contents
+
+    /// Turns paragraphs that read like headings into real ones, so the renderer's own heading
+    /// derivation can build a sidebar for a book whose `<title>` elements are all missing.
+    ///
+    /// Every FB2 file the popular converters produce has this shape: the source's headings were
+    /// flattened into ordinary `<p>` elements and the structure survives only as text. Two
+    /// tiers, in this order:
+    ///
+    /// 1. **Explicit**: the paragraph names its own level - "Part II …", "Chapter 4 …",
+    ///    "Appendix", "Глава 1", "Kapitel 3".
+    /// 2. **Fallback**, and only when tier 1 found fewer than three entries: a paragraph that
+    ///    is nothing but one bold (or emphasised) run. Measured on a real 2.4 MB book (4167
+    ///    paragraphs, 0 titles): tier 1 found its three Parts and nine Chapters cleanly, while
+    ///    205 paragraphs are "entirely bold" and include the front matter's series and author
+    ///    lists - hence the fallback, and hence the sidebar saying the contents were guessed.
+    ///
+    /// The caller only runs this when the file has no `<title>` at all, and the setting that
+    /// enables it is on by default (see ReaderDocument and the host window's FB2 tab).
+    static func promotedContents(_ html: String) -> (html: String, entries: Int) {
+        // One entry per label, case-insensitively: these files carry the same marker twice with
+        // different casing ("Part I …" and "PArt i", "Conclusion and Outlook" and "ConCLusion
+        // And outLook" in the measured book), and neither is a heading the reader wants twice.
+        var seen: Set<String> = []
+        let (promoted, explicit) = promoteParagraphs(html, seen: &seen)
+        guard explicit >= 3 else {
+            let (withBold, bold) = promoteBoldParagraphs(promoted, seen: &seen)
+            return (withBold, explicit + bold)
+        }
+        return (promoted, explicit)
+    }
+
+    /// Whole paragraphs whose entire text is a heading and nothing else.
+    private static func promoteParagraphs(_ html: String, seen: inout Set<String>) -> (html: String, entries: Int) {
+        var entries = 0
+        let out = html.replacingOccurrences(of: #"<p([^>]*)>([^<]{2,120})</p>"#) { match, matched in
+            guard match.numberOfRanges >= 3 else { return matched }
+            let source = matched as NSString
+            // A capture group's range is in the *document's* coordinates while `matched` is only
+            // the matched substring, so it has to be rebased first (see HTMLNormalizer).
+            let attributes = source.substring(with: HTMLNormalizer.rangeWithinMatch(match.range(at: 1), match.range))
+            let text = source.substring(with: HTMLNormalizer.rangeWithinMatch(match.range(at: 2), match.range))
+            guard let level = guessedLevel(for: text) else { return matched }
+            guard seen.insert(HTMLNormalizer.collapsedText(text).lowercased()).inserted else { return matched }
+            entries += 1
+            return "<h\(level)\(attributes)>\(text)</h\(level)>"
+        }
+        return (out, entries)
+    }
+
+    /// The fallback tier. Runs one element at a time so the pattern needs no backreference.
+    private static func promoteBoldParagraphs(_ html: String, seen: inout Set<String>) -> (html: String, entries: Int) {
+        var out = html
+        var entries = 0
+        for tag in ["strong", "emphasis"] {
+            out = out.replacingOccurrences(of: "<p([^>]*)><\(tag)>([^<]{2,80})</\(tag)></p>") { match, matched in
+                guard match.numberOfRanges >= 3 else { return matched }
+                let source = matched as NSString
+                let attributes = source.substring(with: HTMLNormalizer.rangeWithinMatch(match.range(at: 1), match.range))
+                let text = source.substring(with: HTMLNormalizer.rangeWithinMatch(match.range(at: 2), match.range))
+                guard guessedLevel(for: text) == nil, looksLikeHeading(text) else { return matched }
+                guard seen.insert(HTMLNormalizer.collapsedText(text).lowercased()).inserted else { return matched }
+                entries += 1
+                return "<h2\(attributes)><\(tag)>\(text)</\(tag)></h2>"
+            }
+        }
+        return (out, entries)
+    }
+
+    /// The heading level a paragraph's own text claims, or nil. A part is a top level entry and
+    /// everything else sits under it, which is the shape these books have.
+    static func guessedLevel(for text: String) -> Int? {
+        let value = HTMLNormalizer.collapsedText(text)
+        guard looksLikeHeading(text) else { return nil }
+        for (pattern, level) in headingPatterns where matches(pattern, value) { return level }
+        return nil
+    }
+
+    /// What a heading looks like, regardless of language: short, no sentence punctuation at the
+    /// end, not a URL or an address, and not a running head. A cross-reference reads a lot like
+    /// a heading ("Chapter 6.", "Chapter 8).") and is exactly what this has to keep out - the
+    /// real book contains both.
+    static func looksLikeHeading(_ text: String) -> Bool {
+        let value = HTMLNormalizer.collapsedText(text)
+        guard value.count >= 3, value.count <= 80 else { return false }
+        guard let last = value.last, !".),;:".contains(last) else { return false }
+        guard !value.contains("http"), !value.contains("@"), !value.contains("://") else { return false }
+        guard !matches(runningHeadPattern, value) else { return false }
+        // "Epilogue 113", "Appendix 12": a front/back-matter word *followed by nothing but a
+        // number* is the page's running head, while the bare word is the section itself. Measured
+        // on the real book, which has both.
+        return !matches(numberedRunningHeadPattern, value)
+    }
+
+    private static func matches(_ pattern: NSRegularExpression, _ value: String) -> Bool {
+        pattern.firstMatch(in: value, range: NSRange(location: 0, length: (value as NSString).length)) != nil
+    }
+
+    /// Level per pattern. Language-specific on purpose: the format is Russian in origin, but most
+    /// files in the wild are English or German conversions, and a book in another language simply
+    /// gets no guess rather than a wrong one.
+    private static let headingPatterns: [(NSRegularExpression, Int)] = [
+        (#"(?i)^(part|teil|часть|книга|том)\s+([ivxlc]+|\d+)\b"#, 1),
+        (#"(?i)^(chapter|kapitel|глава|раздел)\s+[\dIVXLC]+[.:)]?\s*\S"#, 2),
+        (#"(?i)^(appendix|preface|foreword|prologue|epilogue|introduction|conclusion|afterword|glossary|bibliography|references|notes|index|приложение|предисловие|заключение|примечания)\b"#, 2),
+    ].map { (try! NSRegularExpression(pattern: $0.0), $0.1) }
+
+    /// "References 23" is a running head, not a heading, and one of them sits at the top of
+    /// almost every chapter in a converted book.
+    private static let runningHeadPattern = try! NSRegularExpression(
+        pattern: #"(?i)^(references|notes|index|contents|bibliography|оглавление|содержание|примечания)\s*\d*$"#
+    )
+
+    /// The same shape, for the words that also name a real section: the bare word stays, the
+    /// numbered one goes.
+    private static let numberedRunningHeadPattern = try! NSRegularExpression(
+        pattern: #"(?i)^(references|notes|index|contents|bibliography|epilogue|prologue|appendix|glossary|примечания|содержание|оглавление)\s+\d+$"#
+    )
 
     // MARK: - Attributes
 

@@ -1,14 +1,15 @@
 # EBookQL
 
-Quick Look previews **and thumbnails** for EPUB, MOBI, AZW, AZW3, FictionBook and DjVu books,
-and for Markdown, on macOS. Select a book or a note in the Finder, press **Space**, read it.
+Quick Look previews **and thumbnails** for EPUB, MOBI, AZW, AZW3, FictionBook, DjVu and CBZ
+books, and for Markdown, on macOS. Select a book or a note in the Finder, press **Space**,
+read it.
 
 ![screenshot](docs/screenshot.png)
 
-One reader UI over five parsers (an EPUB one, a libmobi-backed MOBI one, a FictionBook one,
-a DjVu one, and a JavaScriptCore + `marked` Markdown one), so every format looks and behaves
-the same: the same sidebar, the same controls, the same reading position, the same thumbnail
-card. Markdown brings its own math and diagrams, and DjVu brings its own page decoder —
+One reader UI over six parsers (an EPUB one, a libmobi-backed MOBI one, a FictionBook one, a
+DjVu one, a CBZ one, and a JavaScriptCore + `marked` Markdown one), so every format looks and
+behaves the same: the same sidebar, the same controls, the same reading position, the same
+thumbnail card. Markdown brings its own math and diagrams, and DjVu its own page decoder —
 both rendered entirely offline.
 
 ## What you get
@@ -61,7 +62,7 @@ both rendered entirely offline.
 
 ### From the disk image
 
-1. Open `EBookQL-0.3.0.dmg`.
+1. Open `EBookQL-<version>.dmg`.
 2. Drag **EBookQL** onto the **Applications** folder in that window.
 3. **Open EBookQL once.** That is what registers its four extensions: copying the app by
    itself registers nothing. The window reports whether they are live, carries the
@@ -94,14 +95,15 @@ script points `DEVELOPER_DIR` at Xcode itself.
 | `.epub` | the project's own ZIP + OPF/NCX reader | zipped `.epub` |
 | `.fb2` | the project's own XML reader | FictionBook with its base64 images; contents are derived from the book's own sections and headings (see [FictionBook](#fictionbook)) |
 | `.djvu`, `.djv` | the project's own container reader + a vendored JavaScript page decoder | scanned pages; the file's own outline becomes the sidebar (see [DjVu](#djvu)) |
+| `.cbz` | the project's own ZIP reader + the web view's own image loading | a ZIP of page images; its `ComicInfo.xml` supplies the title and any bookmarks (see [CBZ](#cbz)) |
 | `.mobi`, `.azw`, `.azw3` | [libmobi](https://github.com/bfabiszewski/libmobi), vendored | KF7 and KF8; images and the container's NCX table of contents are read from the file |
 | `.md`, `.markdown`, `.mdx` | JavaScriptCore + embedded [marked](https://github.com/markedjs/marked) | GFM; front matter supplies title/author; LaTeX math and mermaid diagrams render offline |
 
-The MOBI family, FictionBook and DjVu have no system-declared UTI, so the app exports one for
-each (`.djvu` is `com.rocaltair.djvu`); the extensions also declare the UTIs other readers
-export, because which declaration wins is not under the extension's control. `.md` and
-`.markdown` use the system's own `net.daringfireball.markdown` type, and `.mdx` is EBookQL's
-own type conforming to it.
+The MOBI family, FictionBook, DjVu and CBZ have no system-declared UTI, so the app exports one
+for each (`.djvu` is `com.rocaltair.djvu`, `.cbz` is `com.rocaltair.cbz`); the extensions also
+declare the UTIs other readers export, because which declaration wins is not under the
+extension's control. `.md` and `.markdown` use the system's own `net.daringfireball.markdown`
+type, and `.mdx` is EBookQL's own type conforming to it.
 
 ## Markdown
 
@@ -145,6 +147,43 @@ While it is on, a book whose contents were guessed says so at the top of the sid
 *"Contents guessed from the text — this file has no chapter titles of its own."* A book that
 has titles of its own is never guessed at, whatever the setting says.
 
+## DjVu
+
+`.djvu` and `.djv` are scanned pages, not text — so this is the one format whose preview
+renders page images rather than markup. The reader reads the container (the multi-page
+directory, the document's own outline, page sizes, metadata) and hands each page's bytes to a
+page decoder bundled with the preview; the pages are never decoded in Swift, and they are
+served one at a time, so opening a 200-page scan does not put the whole book in memory.
+
+- A file with a **document outline** (DjVu's `NAVM` bookmarks) shows it as the sidebar, with
+  the nesting the file declares.
+- A file **without one** lists its pages instead — and says so in the sidebar, because page
+  numbers are not the book's table of contents.
+- Pages are decoded as you approach them (~75-150 ms for a 600 dpi bilevel page) and the
+  decoded canvases are released as you move past them. **A− / A+ size the page**, not the text.
+- The page keeps its exact shape from the moment the preview opens, so the scrollbar and the
+  reading position are right before any page has been decoded — and the position is remembered
+  per page.
+
+DjVu is decoded with DejaView (MIT), vendored under `EBookQLPreview/DjVuAssets/`. DjVuLibre
+would have been the obvious native choice, but it is GPLv2 and this project is MIT.
+
+## CBZ
+
+A `.cbz` is a ZIP archive of page images — the comic convention — so its preview is the
+simplest of the lot: each page is an `<img>` loaded from the archive as you reach it, one
+decompression at a time, with the page's shape reserved from its own image header before the
+picture arrives.
+
+- A comic with a **`ComicInfo.xml`** shows what the manifest says: the title (series and
+  number), the writer, and its per-page **bookmarks** as the sidebar's contents.
+- A comic **without one** lists its pages, taking the archive's own page names, and sorts them
+  the way a person reads (`page9` before `page10`). A comic whose pages sit in chapter folders
+  is listed one level deeper, because a flat list of 600 pages named `001` to `050` sixteen
+  times over is not navigation. As in DjVu, a page list says so in the sidebar.
+- **A− / A+ size the page**, and the reading position is remembered per page.
+- `.cbr` (RAR) and `.cbt` (TAR) are not claimed: only a ZIP is read.
+
 ## Requirements
 
 - macOS 14.0 or later. Developed and tested on macOS 15.8 with Xcode 16.4.
@@ -182,6 +221,12 @@ the book's own cross-links (here 英文 / 中文) work as well.
   there (a flattened "Appendix: Table of Contents" page, in one tested book) and a short
   title-page section contributes an entry of its own. Turn the FB2 tab's switch off and such
   a book simply has no sidebar.
+- **A DjVu's hidden text layer is not selectable.** A scanned DjVu can carry OCR text behind
+  the image; the preview decodes the page images only, so there is nothing to select or search.
+  Page-area hyperlinks (DjVu `maparea`) and a page's rotation flag are not applied either.
+- **Multi-file ("indirect") DjVu documents show a notice.** Their pages live in sibling files
+  that a sandboxed extension is not allowed to read. A single-file DjVu — what everything
+  modern produces — is unaffected.
 - **Remote images are opt-in, and Markdown only.** They stay off until you allow network
   images in the app's Markdown tab; while off, a remote image is a placeholder naming its
   host. Plain `http` needs that switch too — without it the transport itself refuses the
@@ -204,3 +249,8 @@ Markdown parsing embeds **marked** (MIT). The Markdown preview extension also bu
 **Mermaid** (`@mermaid-js/tiny` 12.1.0, MIT) and **KaTeX** 0.19.0 (MIT, with its fonts under
 the SIL OFL 1.1) under `EBookQLPreview/ReaderAssets/`; the licence texts are in that
 directory's `NOTICES.md`.
+
+DjVu page images are decoded by **DejaView** (MIT), vendored under
+`EBookQLPreview/DjVuAssets/` — licence and provenance in that directory's `NOTICES.md`. Its
+own decoder is built from the published DjVu format and the MIT DjvuNet, and contains no
+DjVuLibre (GPL) code; DjVuLibre was used only, outside this repository, to make test files.

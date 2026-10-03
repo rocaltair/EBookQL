@@ -1,14 +1,15 @@
 # EBookQL
 
-Quick Look previews **and thumbnails** for EPUB, MOBI, AZW, AZW3 and FictionBook books, and
-for Markdown, on macOS. Select a book or a note in the Finder, press **Space**, read it.
+Quick Look previews **and thumbnails** for EPUB, MOBI, AZW, AZW3, FictionBook and DjVu books,
+and for Markdown, on macOS. Select a book or a note in the Finder, press **Space**, read it.
 
 ![screenshot](docs/screenshot.png)
 
-One reader UI over four parsers (an EPUB one, a libmobi-backed MOBI one, a FictionBook one,
-and a JavaScriptCore + `marked` Markdown one), so every format looks and behaves the same:
-the same sidebar, the same controls, the same reading position, the same thumbnail card.
-Markdown brings its own math and diagrams, rendered entirely offline.
+One reader UI over five parsers (an EPUB one, a libmobi-backed MOBI one, a FictionBook one,
+a DjVu one, and a JavaScriptCore + `marked` Markdown one), so every format looks and behaves
+the same: the same sidebar, the same controls, the same reading position, the same thumbnail
+card. Markdown brings its own math and diagrams, and DjVu brings its own page decoder —
+both rendered entirely offline.
 
 ## What you get
 
@@ -92,14 +93,15 @@ script points `DEVELOPER_DIR` at Xcode itself.
 |---|---|---|
 | `.epub` | the project's own ZIP + OPF/NCX reader | zipped `.epub` |
 | `.fb2` | the project's own XML reader | FictionBook with its base64 images; contents are derived from the book's own sections and headings (see [FictionBook](#fictionbook)) |
+| `.djvu`, `.djv` | the project's own container reader + a vendored JavaScript page decoder | scanned pages; the file's own outline becomes the sidebar (see [DjVu](#djvu)) |
 | `.mobi`, `.azw`, `.azw3` | [libmobi](https://github.com/bfabiszewski/libmobi), vendored | KF7 and KF8; images and the container's NCX table of contents are read from the file |
 | `.md`, `.markdown`, `.mdx` | JavaScriptCore + embedded [marked](https://github.com/markedjs/marked) | GFM; front matter supplies title/author; LaTeX math and mermaid diagrams render offline |
 
-The MOBI family and FictionBook have no system-declared UTI, so the app exports one for each
-(`.fb2` is `com.rocaltair.fb2`); the extensions also declare the UTIs other readers export,
-because which declaration wins is not under the extension's control. `.md` and `.markdown`
-use the system's own `net.daringfireball.markdown` type, and `.mdx` is EBookQL's own type
-conforming to it.
+The MOBI family, FictionBook and DjVu have no system-declared UTI, so the app exports one for
+each (`.djvu` is `com.rocaltair.djvu`); the extensions also declare the UTIs other readers
+export, because which declaration wins is not under the extension's control. `.md` and
+`.markdown` use the system's own `net.daringfireball.markdown` type, and `.mdx` is EBookQL's
+own type conforming to it.
 
 ## Markdown
 

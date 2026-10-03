@@ -35,6 +35,10 @@
 				     exports the type and previews it here rather than in a fifth appex:
 				     the formats only differ in their parser. -->
 				<string>com.rocaltair.fb2</string>
+				<!-- DjVu. Nothing on macOS declares .djvu/.djv (measured), so EBookQL
+				     exports the type and previews it here too: like FB2, the format
+				     differs in its parser and its page, not in its extension target. -->
+				<string>com.rocaltair.djvu</string>
 				<!-- The MOBI family has no system UTI: whichever app exports a
 				     declaration for these extensions wins. EBookQL exports its own
 				     (com.rocaltair.mobi) so it works standalone, and also lists the
@@ -90,6 +94,26 @@
 				</array>
 				<key>public.mime-type</key>
 				<string>application/x-mobipocket-ebook</string>
+			</dict>
+		</dict>
+		<dict>
+			<key>UTTypeConformsTo</key>
+			<array>
+				<string>public.data</string>
+			</array>
+			<key>UTTypeDescription</key>
+			<string>DjVu document</string>
+			<key>UTTypeIdentifier</key>
+			<string>com.rocaltair.djvu</string>
+			<key>UTTypeTagSpecification</key>
+			<dict>
+				<key>public.filename-extension</key>
+				<array>
+					<string>djvu</string>
+					<string>djv</string>
+				</array>
+				<key>public.mime-type</key>
+				<string>image/vnd.djvu</string>
 			</dict>
 		</dict>
 	</array>

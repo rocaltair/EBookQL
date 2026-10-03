@@ -35,6 +35,8 @@
 				<!-- See the note in EBookQLPreview/Info.plist. -->
 				<string>gkr.mobi.quicklook</string>
 				<string>com.amazon.mobi</string>
+				<!-- DjVu: EBookQL's own type, since nothing on macOS declares .djvu. -->
+				<string>com.rocaltair.djvu</string>
 			</array>
 			<key>QLThumbnailMinimumDimension</key>
 			<integer>16</integer>
@@ -85,6 +87,26 @@
 				</array>
 				<key>public.mime-type</key>
 				<string>application/x-mobipocket-ebook</string>
+			</dict>
+		</dict>
+		<dict>
+			<key>UTTypeConformsTo</key>
+			<array>
+				<string>public.data</string>
+			</array>
+			<key>UTTypeDescription</key>
+			<string>DjVu document</string>
+			<key>UTTypeIdentifier</key>
+			<string>com.rocaltair.djvu</string>
+			<key>UTTypeTagSpecification</key>
+			<dict>
+				<key>public.filename-extension</key>
+				<array>
+					<string>djvu</string>
+					<string>djv</string>
+				</array>
+				<key>public.mime-type</key>
+				<string>image/vnd.djvu</string>
 			</dict>
 		</dict>
 	</array>

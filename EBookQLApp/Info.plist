@@ -80,6 +80,31 @@
 				<string>application/x-mobipocket-ebook</string>
 			</dict>
 		</dict>
+		<!-- DjVu. Measured on macOS 15.8: nothing declares .djvu or .djv either, so
+		     both are dynamic types until EBookQL says otherwise. It conforms to
+		     public.data and deliberately NOT to public.image: there is no system DjVu
+		     decoder, and claiming image conformance would invite the system's image
+		     handling to claim the file. -->
+		<dict>
+			<key>UTTypeConformsTo</key>
+			<array>
+				<string>public.data</string>
+			</array>
+			<key>UTTypeDescription</key>
+			<string>DjVu document</string>
+			<key>UTTypeIdentifier</key>
+			<string>com.rocaltair.djvu</string>
+			<key>UTTypeTagSpecification</key>
+			<dict>
+				<key>public.filename-extension</key>
+				<array>
+					<string>djvu</string>
+					<string>djv</string>
+				</array>
+				<key>public.mime-type</key>
+				<string>image/vnd.djvu</string>
+			</dict>
+		</dict>
 		<!-- MDX has no system-declared UTI either. Conforming to
 		     net.daringfireball.markdown (and public.plain-text) means macOS still
 		     treats .mdx as Markdown when EBookQL's extension is not chosen. -->

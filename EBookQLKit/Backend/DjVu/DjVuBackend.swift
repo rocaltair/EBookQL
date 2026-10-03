@@ -56,35 +56,20 @@ public final class DjVuBackend: BookBackend {
             shared ? Self.documentPath : Self.resourcePrefix + String(index)
         }
 
-        let sections = pages.map { page in
-            BookSection(
-                id: Self.pageKey(page),
-                html: sectionHTML(page: page, resource: resource(page.index),
-                                  showHeading: pages.count > 1),
-                sourcePath: Self.pageKey(page),
-                title: page.label
+        let models = pages.map { page in
+            PageImageBook.Page(
+                key: Self.pageKey(page),
+                label: page.label,
+                width: page.width,
+                height: page.height,
+                resource: resource(page.index)
             )
         }
-
         let outline = structure.outline
-        let toc: [TOCEntry]
-        let tocIsFallback: Bool
-        let tocNote: String?
-        if !outline.isEmpty {
-            toc = tocEntries(outline, pages: pages)
-            tocIsFallback = false
-            tocNote = nil
-        } else if pages.count > 1 {
-            toc = pages.map {
-                TOCEntry(title: $0.label, target: BookTarget(sectionPath: Self.pageKey($0)))
-            }
-            tocIsFallback = true
-            tocNote = Self.pageListNote
-        } else {
-            toc = []
-            tocIsFallback = false
-            tocNote = nil
-        }
+        let contents = PageImageBook.contents(
+            models,
+            declared: self.tocEntries(outline, pages: pages, models: models)
+        )
 
         os_log("djvubook %{public}@ %{public}d pages, outline %{public}d, %{public}@ in %.2fs",
                log: log, type: .info, url.lastPathComponent, pages.count, outline.count,
@@ -94,11 +79,12 @@ public final class DjVuBackend: BookBackend {
             url: url,
             format: .djvu,
             metadata: metadata(url: url, structure: structure),
-            sections: sections,
-            toc: toc,
+            sections: PageImageBook.sections(models, host: Self.host,
+                                              headings: models.count > 1),
+            toc: contents.toc,
             resources: DjVuResourceProvider(data: data, structure: structure),
-            tocIsFallback: tocIsFallback,
-            tocNote: tocNote
+            tocIsFallback: contents.isFallback,
+            tocNote: contents.note
         )
     }
 
@@ -119,32 +105,13 @@ public final class DjVuBackend: BookBackend {
 
     // MARK: - Pieces
 
+    /// Scheme host the page bytes are served on: `ekbres://djvu/page/<index>`.
+    static let host = "djvu"
+
     /// The section key doubles as the outline's target: a bookmark naming a component
     /// (`#00000002.djvu`) resolves against the same string.
     private static func pageKey(_ page: DjVuPage) -> String {
         page.directoryID ?? "page-\(page.index + 1)"
-    }
-
-    /// One page: a hidden heading that gives the page a real anchor for the reading
-    /// position, and the frame the reader's script fills with the decoded page.
-    ///
-    /// The heading is `h1` because that is what the reader's position tracking looks
-    /// for; it is hidden by the stylesheet, not by `display: none`, so its box is real.
-    /// A one-page document gets no heading: it would be the only thing the sidebar
-    /// could derive from, and a one-entry list of "1" is not navigation. `aspect-ratio`
-    /// is the page's own shape, so the page box has the right height before anything is
-    /// decoded and nothing shifts when the canvas arrives.
-    private static func sectionHTML(page: DjVuPage, resource: String, showHeading: Bool) -> String {
-        var attributes = " data-page=\"\(page.index)\" data-label=\"\(page.index + 1)\""
-            + " data-source=\"\(resource)\""
-        if page.width > 0, page.height > 0 {
-            attributes += " style=\"aspect-ratio: \(page.width) / \(page.height)\""
-        }
-        let heading = showHeading
-            ? "<h1 class=\"djvu-page-no\" id=\"page-\(page.index + 1)\">"
-                + "\(HTMLNormalizer.escapeHTML(page.label))</h1>\n"
-            : ""
-        return heading + "<div class=\"djvu-frame\"\(attributes)></div>"
     }
 
     private static func metadata(url: URL, structure: DjVuStructure) -> BookMetadata {
@@ -155,13 +122,19 @@ public final class DjVuBackend: BookBackend {
         )
     }
 
-    private static func tocEntries(_ nodes: [DjVuOutlineNode], pages: [DjVuPage]) -> [TOCEntry] {
+    /// The file's own outline, in the reader's terms. A bookmark with no page to point at
+    /// stays as a plain label rather than becoming a dead link.
+    private static func tocEntries(
+        _ nodes: [DjVuOutlineNode],
+        pages: [DjVuPage],
+        models: [PageImageBook.Page]
+    ) -> [TOCEntry] {
         nodes.map { node in
             TOCEntry(
                 title: node.title,
-                target: BookTarget(sectionPath: pageIndex(for: node.fragment, pages: pages)
-                    .map { pageKey(pages[$0]) }),
-                children: tocEntries(node.children, pages: pages)
+                target: pageIndex(for: node.fragment, pages: pages)
+                    .map { PageImageBook.target(models[$0]) },
+                children: tocEntries(node.children, pages: pages, models: models)
             )
         }
     }
@@ -177,12 +150,7 @@ public final class DjVuBackend: BookBackend {
     }
 
     /// Shown above a page list that stands in for a file with no outline at all.
-    static var pageListNote: String {
-        let language = Locale.preferredLanguages.first?.lowercased() ?? "en"
-        return language.hasPrefix("zh")
-            ? "这个文件里没有目录，下面列出的是页面。"
-            : "This file declares no contents; the pages are listed instead."
-    }
+    static var pageListNote: String { PageImageBook.pageListNote }
 
     // MARK: - Files
 

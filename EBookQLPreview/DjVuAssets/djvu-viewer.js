@@ -31,7 +31,7 @@ import { renderPage } from './render.js';
     if (root.getAttribute('data-format') !== 'djvu') { return; }
 
     var frames = Array.prototype.slice.call(
-        document.querySelectorAll('.djvu-frame[data-source]'));
+        document.querySelectorAll('.page-frame[data-source]'));
     if (!frames.length) { return; }
 
     /* Scheme + host the backend serves page bytes on. */
@@ -51,27 +51,6 @@ import { renderPage } from './render.js';
     var wanted = [];             // frames inside the prefetch window, nearest first
     var kept = [];               // decoded frames, oldest use first
     var running = false;
-
-    /* ---------- zoom ---------- */
-
-    /* The page box is sized in percent of the text column times this variable, so the
-       reader's own A-/A+ scales the scan the way a viewer scales a page image - and a
-       page decoded for a smaller box is re-decoded at the next size it is asked for. */
-    setZoom((window.__ql && window.__ql.zoom) || 1);
-    var innerSetZoom = window.ekbSetZoom;
-    window.ekbSetZoom = function (factor) {
-        if (typeof innerSetZoom === 'function') { innerSetZoom(factor); }
-        setZoom(factor);
-    };
-
-    function setZoom(factor) {
-        root.style.setProperty('--djvu-zoom', String(factor));
-        for (var i = 0; i < frames.length; i++) {
-            var entry = frames[i]._djvu;
-            if (!entry || !entry.sub || entry.failed) { continue; }
-            if (neededSubsample(frames[i], entry.pageWidth) < entry.sub) { release(frames[i]); }
-        }
-    }
 
     /* The integer subsample a page has to be decoded at to look sharp in this frame:
        one output pixel per device pixel, capped at 2x (a retina panel). */
@@ -211,7 +190,7 @@ import { renderPage } from './render.js';
 
         release(frame);
         frame.appendChild(canvas);
-        frame.classList.add('djvu-ready');
+        frame.classList.add('page-ready');
         frame._djvu = {
             canvas: canvas, sub: sub, pageWidth: pageWidth, stale: false, failed: false,
             source: frame.getAttribute('data-source'),
@@ -221,7 +200,7 @@ import { renderPage } from './render.js';
     }
 
     function fail(frame, error) {
-        frame.classList.add('djvu-failed');
+        frame.classList.add('page-failed');
         frame._djvu = { failed: true };
         if (window.console) { console.warn('DjVu page could not be decoded', error); }
     }
@@ -239,7 +218,7 @@ import { renderPage } from './render.js';
         entry.canvas.width = 0;
         entry.canvas.height = 0;
         if (entry.canvas.parentNode) { entry.canvas.parentNode.removeChild(entry.canvas); }
-        frame.classList.remove('djvu-ready');
+        frame.classList.remove('page-ready');
         if (entry.source !== '/document') { documents.delete(entry.source); }
         frame._djvu = { stale: true };
     }

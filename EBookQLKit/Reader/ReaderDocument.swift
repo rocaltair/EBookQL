@@ -168,6 +168,7 @@ public struct ReaderDocument {
         case .markdown: formatAttribute = " data-format=\"markdown\""
         case .fb2: formatAttribute = " data-format=\"fb2\""
         case .djvu: formatAttribute = " data-format=\"djvu\""
+        case .cbz: formatAttribute = " data-format=\"cbz\""
         default: formatAttribute = ""
         }
         let themeAttribute = book.format == .markdown

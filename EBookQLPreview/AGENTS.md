@@ -1,6 +1,6 @@
 # EBookQLPreview
 
-Quick Look preview app-extension for EPUB / MOBI / AZW / AZW3 / FB2 / DjVu. macOS instantiates `ReaderPreviewProvider` via `NSExtensionPrincipalClass`; it parses the book, builds the HTML with `ReaderDocument`, and hosts it in a `WKWebView`. The Markdown-only sibling `EBookQLMarkdownPreview` reuses these same Swift sources (plus `ReaderAssets/`); only its Info.plist/entitlements and UTI list differ. `DjVuAssets/` ships only here.
+Quick Look preview app-extension for EPUB / MOBI / AZW / AZW3 / FB2 / DjVu / CBZ. macOS instantiates `ReaderPreviewProvider` via `NSExtensionPrincipalClass`; it parses the book, builds the HTML with `ReaderDocument`, and hosts it in a `WKWebView`. The Markdown-only sibling `EBookQLMarkdownPreview` reuses these same Swift sources (plus `ReaderAssets/`); only its Info.plist/entitlements and UTI list differ. `DjVuAssets/` ships only here, and a CBZ needs no asset at all.
 
 ## WHERE TO LOOK
 | Task | Location |
@@ -23,7 +23,7 @@ Quick Look preview app-extension for EPUB / MOBI / AZW / AZW3 / FB2 / DjVu. macO
 - Position is reported to `ReadingPositionStore` on scroll; zoom / sidebar width round-trip through NSUserDefaults.
 - Markdown preferences are read ONCE per preview and only when `isMarkdown(url)` is true: `ReaderPreferences.load()` returns `jsParse`/`theme` (defaults on any failure), `jsParse` decides rendered HTML vs raw source in the backend and gates the page's assets, and a `.system` theme is resolved against the appex's `effectiveAppearance` before `ReaderDocument.Options` is built. EPUB/MOBI keep `ReaderDocument.Options` defaults.
 - `ReaderSchemeHandler` serves `ekbres://assets/<bare filename>` from `Bundle.main`; every other host goes through the book's `ResourceSource`. Every answer carries `Access-Control-Allow-Origin`, without which a DjVu page's `fetch()` of its page images is blocked (an `<img>` would still load - the two are not the same check).
-- A DjVu book's page loads one extra module from the bundle (`ekbres://assets/djvu-viewer.js`, emitted by `ReaderDocument` for `.djvu` only); the appex target must therefore keep `DjVuAssets/` in its resources phase, flat.
+- A DjVu book's page loads one extra module from the bundle (`ekbres://assets/djvu-viewer.js`, emitted by `ReaderDocument` for `.djvu` only); the appex target must therefore keep `DjVuAssets/` in its resources phase, flat. A CBZ emits no script: its page boxes hold `<img src="ekbres://cbz/page/<n>">` and the web view does the rest, so `com.rocaltair.cbz` costs the appex nothing but its UTI declaration.
 
 ## ANTI-PATTERNS
 - Dropping `-Wl,-needed_framework,QuickLookUI` from `project.yml` (see root AGENTS.md) — the extension crashes in `EXConcreteExtensionContextVendor`.

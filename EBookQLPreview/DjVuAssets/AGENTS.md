@@ -22,8 +22,8 @@ Everything except `djvu-viewer.js` is DejaView, unmodified (see NOTICES.md for t
 - Page bytes come over the same scheme: `ekbres://djvu/page/<index>` (one page, stand-alone) or `ekbres://djvu/document` (the whole file, for a document whose pages inherit a shared dictionary).
 - Decoding runs on the MAIN thread. A `file://` page cannot create a worker - measured: `SecurityError` for a worker beside the page and for one on the custom scheme - so pages are decoded one at a time, nearest-first, with a yield between them.
 - Decoded canvases are bounded (a pixel budget and a page count) and freed for pages the reader has scrolled away from; the page box keeps its height from `aspect-ratio`, so nothing moves when a page is dropped or re-decoded.
-- Zoom arrives as `--djvu-zoom` on `<html>`, set by wrapping `window.ekbSetZoom`: the page box is `calc(100% * var(--djvu-zoom))`, so the reader's A-/A+ scales the scan rather than its text.
-- A page that cannot be decoded gets `djvu-failed` on its frame and stays a labelled empty box. Never a blank page, never a silent retry loop.
+- The page box's classes and the zoom variable are shared with the CBZ format: `.page-frame`, `page-ready`, `page-failed`, `.page-no`, `--page-zoom`. `--page-zoom` is set by `ReaderAssets.js`'s `ekbSetZoom` (the reader's own script, the only place that sees a zoom change), not here - a page-image format must not grow its own zoom wiring.
+- A page that cannot be decoded gets `page-failed` on its box and stays a labelled empty box. Never a blank page, never a silent retry loop.
 
 ## ANTI-PATTERNS
 - Editing the vendored files. If upstream needs to move, re-copy the whole set and update NOTICES.md.

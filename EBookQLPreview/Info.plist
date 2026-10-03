@@ -39,6 +39,8 @@
 				     exports the type and previews it here too: like FB2, the format
 				     differs in its parser and its page, not in its extension target. -->
 				<string>com.rocaltair.djvu</string>
+				<!-- CBZ: a ZIP of page images, and its own type for the same reason. -->
+				<string>com.rocaltair.cbz</string>
 				<!-- The MOBI family has no system UTI: whichever app exports a
 				     declaration for these extensions wins. EBookQL exports its own
 				     (com.rocaltair.mobi) so it works standalone, and also lists the
@@ -114,6 +116,25 @@
 				</array>
 				<key>public.mime-type</key>
 				<string>image/vnd.djvu</string>
+			</dict>
+		</dict>
+		<dict>
+			<key>UTTypeConformsTo</key>
+			<array>
+				<string>public.data</string>
+			</array>
+			<key>UTTypeDescription</key>
+			<string>Comic book archive</string>
+			<key>UTTypeIdentifier</key>
+			<string>com.rocaltair.cbz</string>
+			<key>UTTypeTagSpecification</key>
+			<dict>
+				<key>public.filename-extension</key>
+				<array>
+					<string>cbz</string>
+				</array>
+				<key>public.mime-type</key>
+				<string>application/vnd.comicbook+zip</string>
 			</dict>
 		</dict>
 	</array>

@@ -8,10 +8,12 @@ EBookQLKit/
 ├── Model/Book.swift          # Book, BookMetadata, BookSection, TOCEntry, BookTarget, ReadingPosition
 ├── Backend/
 │   ├── BookBackend.swift     # protocol + BookOpener dispatch + BookParseError + BookPath
+│   ├── PageImageBook.swift   # what DjVu and CBZ share (sections, page box, contents rule)
 │   ├── EPUB/EPUBBackend.swift
 │   ├── MOBI/MOBIBackend.swift
 │   ├── FB2/                  # FB2Backend + FB2Document
 │   ├── DjVu/                 # container reader + ZP/BZZ → see Backend/AGENTS.md
+│   ├── CBZ/                  # ZIP page listing + ComicInfo + image headers
 │   └── Markdown/             # MarkdownBackend + MarkdownRenderer + MarkdownAssets → see Markdown/AGENTS.md
 ├── Reader/                   # ReaderDocument, HTMLNormalizer, ReaderAssets, ReaderTheme → see Reader/AGENTS.md
 ├── Store/ReadingPositionStore.swift
@@ -38,6 +40,7 @@ EBookQLKit/
 - Markdown rendering uses embedded `marked` 18.0.14 (UMD, in `MarkdownAssets`) in a fresh `JSContext` per parse; JavaScriptCore is not thread-safe, so no context is ever shared. Any engine failure becomes `BookParseError.malformed`.
 - `BookSection.html` is `<body>` inner content; `basePath` / `sourcePath` drive relative-link + resource resolution.
 - A DjVu `Book` is one section per page and is the only backend that decodes nothing: it serves each page's bytes (`ekbres://djvu/page/<index>`, or `/document` when a page carries `INCL`) and the preview appex's vendored JavaScript rasterises them. A damaged/truncated file is `BookParseError.corrupt` rather than a book of empty pages.
+- A CBZ `Book` is the same shape (see `PageImageBook`) without the decoder: each page is an `<img src="ekbres://cbz/page/<index>">` in a box whose aspect ratio came from the image's own header, so the web view fetches and decompresses only the pages being read.
 - Resources are exposed via `ResourceProvider.url(for:relativeTo:)`, returning `file://` or `ekbres://`.
 - Errors surface as `BookParseError` (`unsupportedFormat`/`containerNotFound`/`opfNotFound`/`malformed`/`io`/`encrypted`/`corrupt`); encrypted/corrupt become a notice page, never a decrypt.
 - `openForThumbnail` must stay cheap: first section only, never the whole file in memory.

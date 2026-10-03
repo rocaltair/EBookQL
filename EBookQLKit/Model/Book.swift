@@ -15,6 +15,7 @@ public enum BookFormat: String, Sendable {
     case azw3
     case fb2
     case djvu
+    case cbz
     case markdown
 }
 

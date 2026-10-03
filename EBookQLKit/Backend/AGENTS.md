@@ -1,6 +1,6 @@
 # EBookQLKit/Backend
 
-Five parsers behind one protocol. `BookOpener.backend(for:)` picks by file extension; `BookBackend.open(_:workDirectory:)` returns a `Book`. Markdown uses the `markdownRendering` overload to pick rendered HTML vs raw source; FictionBook uses the facade's `contentsFromText:` overload to decide whether a title-less book may have its contents guessed (the app's FB2 tab, on by default).
+Six parsers behind one protocol. `BookOpener.backend(for:)` picks by file extension; `BookBackend.open(_:workDirectory:)` returns a `Book`. Markdown uses the `markdownRendering` overload to pick rendered HTML vs raw source; FictionBook uses the facade's `contentsFromText:` overload to decide whether a title-less book may have its contents guessed (the app's FB2 tab, on by default).
 
 ## WHERE TO LOOK
 | Task | Location |
@@ -11,8 +11,12 @@ Five parsers behind one protocol. `BookOpener.backend(for:)` picks by file exten
 | FB2 contents guessed from the text | FB2/FB2Document.swift `promotedContents` |
 | MOBI/AZW/AZW3 (libmobi, KF7 + KF8) | MOBI/MOBIBackend.swift:22 |
 | DjVu container: chunk tree, DIRM, outline, metadata | DjVu/DjVuStructure.swift:19 |
-| DjVu `Book` + page bytes over `ekbres://djvu` | DjVu/DjVuBackend.swift:19 / :206 (`DjVuResourceProvider`) |
+| DjVu `Book` + page bytes over `ekbres://djvu` | DjVu/DjVuBackend.swift:19 / `DjVuResourceProvider` |
 | ZP coder + BZZ (DIRM/NAVM/TXTz/ANTz) | DjVu/DjVuBZZ.swift:19 + DjVu/DjVuZPTable.swift |
+| What DjVu and CBZ share (page-image books) | PageImageBook.swift:26 |
+| CBZ archive: pages, order, image headers | CBZ/CBZDocument.swift:50 / :221 (`CBZImageHeader`) |
+| CBZ `Book` + page bytes over `ekbres://cbz` | CBZ/CBZBackend.swift:24 / :149 (`CBZResourceProvider`) |
+| `ComicInfo.xml` manifest (title, writer, bookmarks) | CBZ/CBZComicInfo.swift:13 |
 | Markdown (.md/.markdown/.mdx) | Markdown/MarkdownBackend.swift:19 |
 | Markdown → HTML via JavaScriptCore | Markdown/MarkdownRenderer.swift:17 |
 | marked UMD + bootstrap (Swift literals) | Markdown/MarkdownAssets.swift:17 |
@@ -32,6 +36,11 @@ Five parsers behind one protocol. `BookOpener.backend(for:)` picks by file exten
 - DjVu labels: a directory title that is not just the component's file name (`p1.djvu`, `00000001.djvu`), else the page number (see `DjVuFileNames.looksLikeFileName`).
 - DjVu refuses honestly rather than half-rendering: the indirect (multi-file) flavour throws - its pages are sibling files the sandbox cannot read - and a damaged `DIRM` costs the contents, not the preview.
 - BZZ is needed for `DIRM`/`NAVM`/`ANTz` (writers always compress those four) and is the only compression implemented here; `DjVuBZZ` is a line-by-line port of the JavaScript decoder, checked byte-for-byte against it on real `DIRM`/`NAVM` payloads.
+- CBZ (and DjVu, which shares it) is a **page-image book**: `PageImageBook` owns what both formats do identically - one section per page, a hidden `<h1 class="page-no">` for the reading anchor, the page box (`page-frame`, `aspect-ratio` from the page's own size, `data-label`, `data-source`), the contents rule (declared outline wins, else a page list with `tocNote`, else no sidebar for one page) and the `pageListNote` string. A new page-image format should reach for it rather than repeat it.
+- CBZ: pages are the ZIP's image entries, sorted in **reading order** (digit runs compare as numbers, so `page9` < `page10`; an archive's own order is not a promise), with `__MACOSX/`, `._*`, `.DS_Store` excluded. Each page's pixel size comes from its own image header (PNG/GIF/JPEG/WebP/BMP, parsed here) read from a **prefix** of the entry - only enough of the file is inflated to reach the header. `ComicInfo.xml` (ComicRack's manifest) supplies title (`Series #Number`, else `Title`), author (`Writer`) and per-page **bookmarks**, which are the declared TOC; its `Image` attribute is a page index, but a file name is accepted because writers do that too. Pages in folders become one TOC level per folder, because 600 pages named `001`-`050` sixteen times is not navigation.
+- CBZ pages are plain `<img loading="lazy" decoding="async">` inside their box: nothing is decoded in Swift and no script is shipped for them, so the web view fetches and decompresses exactly the pages near the viewport (`ekbres://cbz/page/<index>`, one entry at a time, on the scheme handler's serial queue - the same convention as the EPUB provider).
+- CBZ image headers: `CBZImageHeader` reads PNG/GIF/JPEG/WebP/BMP itself (ImageIO is not used: the data is deliberately a truncated prefix). The JPEG path also reads the EXIF **orientation** (0x0112) and swaps the sides for 5-8, because WebKit applies orientation when it draws the image (measured: `naturalWidth` of an orientation-6 JPEG comes back rotated) - a box sized from the raw frame header would clip the page.
+- `Archive.extract`'s consumer cannot stop early (it returns Void), so `CBZDocument.prefix` aborts by throwing from inside it, with `skipCRC32: true`. Nothing is left half-read: the next extract seeks first.
 - Keep parsing deterministic and side-effect free apart from the work directory.
 
 ## ANTI-PATTERNS
@@ -49,6 +58,9 @@ Five parsers behind one protocol. `BookOpener.backend(for:)` picks by file exten
 - Serving a whole document's bytes for a normal DjVu (bounded memory is the point of the per-page route), or a page's own bytes for a document whose pages carry `INCL` (they cannot be decoded without the shared dictionary).
 - Reading the whole file for a DjVu thumbnail: `openForThumbnail` reads `DjVuStructureReader.headerBytes` and gets the count and the metadata from the directory.
 - A DjVu page list without `tocNote`, or with `tocIsFallback: false`.
+- Repeating the page-image plumbing per format: sections, the page box and the contents rule belong to `PageImageBook`.
+- Trusting a ZIP's entry order for a CBZ page sequence, or inflating a whole entry to find its image header.
+- Claiming `.cbr`/`.cbt` (RAR/TAR): neither is a ZIP, and neither is read here.
 
 ## NOTES
 - Long MOBI bodies are truncated at 8 MB of text (`Book.truncatedAt`); sidebar entries past the cut become non-clickable labels.

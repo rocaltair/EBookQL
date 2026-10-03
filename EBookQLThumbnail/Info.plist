@@ -35,8 +35,9 @@
 				<!-- See the note in EBookQLPreview/Info.plist. -->
 				<string>gkr.mobi.quicklook</string>
 				<string>com.amazon.mobi</string>
-				<!-- DjVu: EBookQL's own type, since nothing on macOS declares .djvu. -->
+				<!-- DjVu and CBZ: EBookQL's own types, since nothing on macOS declares them. -->
 				<string>com.rocaltair.djvu</string>
+				<string>com.rocaltair.cbz</string>
 			</array>
 			<key>QLThumbnailMinimumDimension</key>
 			<integer>16</integer>
@@ -107,6 +108,25 @@
 				</array>
 				<key>public.mime-type</key>
 				<string>image/vnd.djvu</string>
+			</dict>
+		</dict>
+		<dict>
+			<key>UTTypeConformsTo</key>
+			<array>
+				<string>public.data</string>
+			</array>
+			<key>UTTypeDescription</key>
+			<string>Comic book archive</string>
+			<key>UTTypeIdentifier</key>
+			<string>com.rocaltair.cbz</string>
+			<key>UTTypeTagSpecification</key>
+			<dict>
+				<key>public.filename-extension</key>
+				<array>
+					<string>cbz</string>
+				</array>
+				<key>public.mime-type</key>
+				<string>application/vnd.comicbook+zip</string>
 			</dict>
 		</dict>
 	</array>

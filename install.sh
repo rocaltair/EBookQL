@@ -65,7 +65,10 @@ install_app() {
     rm -rf "$INSTALLED_APP"
     ditto "$BUILT_APP" "$INSTALLED_APP"
     codesign --verify --strict "$INSTALLED_APP"
-    "$LSREGISTER" -f "$INSTALLED_APP"
+    # -R -trusted, not a bare -f: the appexes inside have to end up in the LaunchServices
+    # database too, or the extension resolves but cannot launch ("Extension ... not found
+    # in LS database" in the log, measured).
+    "$LSREGISTER" -f -R -trusted "$INSTALLED_APP"
     pluginkit -a "$INSTALLED_APP/Contents/PlugIns/EBookQLPreview.appex"
     pluginkit -a "$INSTALLED_APP/Contents/PlugIns/EBookQLThumbnail.appex"
     pluginkit -a "$INSTALLED_APP/Contents/PlugIns/EBookQLMarkdownPreview.appex"
@@ -74,6 +77,19 @@ install_app() {
     pluginkit -e use -i "$THUMBNAIL_ID"
     pluginkit -e use -i "$MARKDOWN_PREVIEW_ID"
     pluginkit -e use -i "$MARKDOWN_THUMBNAIL_ID"
+    # Verify rather than assume: the registration can be dropped again by LaunchServices
+    # housekeeping (measured - the four appexes were listed right after an install and
+    # gone twenty minutes later, and with no generator the Quick Look panel simply does
+    # not appear). Opening the app once is the one path that always rebuilds it.
+    missing=""
+    for id in "$PREVIEW_ID" "$THUMBNAIL_ID" "$MARKDOWN_PREVIEW_ID" "$MARKDOWN_THUMBNAIL_ID"; do
+        pluginkit -m -v -i "$id" 2>/dev/null | grep -q "$id" || missing="$missing $id"
+    done
+    if [ -n "$missing" ]; then
+        echo "NOT REGISTERED:$missing" >&2
+        echo "Open the app once and it re-registers itself:  open \"$INSTALLED_APP\"" >&2
+        exit 1
+    fi
     echo "installed $INSTALLED_APP"
     status
 }

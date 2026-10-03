@@ -15,7 +15,8 @@ both rendered entirely offline.
 ## What you get
 
 - **Quick Look preview** — a full window in the Finder's Quick Look panel: the book's own
-  text in a readable column, its images, and a covering page instead of a blank panel.
+  text (or, for a scan or a comic, its pages) in a readable column, its images, and a covering
+  page instead of a blank panel.
 - **Markdown, with math and diagrams** — `.md`, `.markdown` and `.mdx` render as GFM.
   Inline and display LaTeX become real math via KaTeX, fenced `mermaid` blocks become
   diagrams, and heading ids keep `[text](#heading)` links working. Both libraries are
@@ -37,6 +38,8 @@ both rendered entirely offline.
   the panel. Holding a button keeps stepping, because Quick Look opens the file in its
   default app on a double-click anywhere in the panel, so two quick clicks are not an
   option. Only the book's text scales: the sidebar, the images and the panel keep their size.
+  A page-image book — a DjVu scan, a CBZ comic — has no text to scale, so there the same
+  control sizes the **page**.
 - **Resizable sidebar** — drag the divider; the width is remembered. It stops at the width
   its own header row still fits in, rather than squeezing the controls.
 - **See where a link leads** — hover a link or an image and its real target appears in a
@@ -51,12 +54,14 @@ both rendered entirely offline.
   whether Markdown previews may load remote images. *FB2* holds the one FictionBook choice:
   whether a book whose chapter titles are missing may have its contents guessed from its text.
 - **Large books stay responsive** — the book is one page, so sections below the fold are
-  not laid out until they are needed.
+  not laid out until they are needed. (A page-image book is laid out in full on purpose:
+  every page's height is known from its own shape, which is what makes the scrollbar and the
+  reading position exact before anything has loaded.)
 - **No network by default** — the extensions are sandboxed, and the custom scheme only ever
   serves the book being previewed plus the extension's own bundled rendering assets. A
   remote (http/https) image is not fetched: in Markdown it is replaced by a placeholder
-  naming its host unless you allow network images in the app's Markdown tab, and EPUB/MOBI/FB2
-  previews never load one at all.
+  naming its host unless you allow network images in the app's Markdown tab, and no book
+  format — EPUB, MOBI, FictionBook, DjVu, CBZ — ever loads one.
 
 ## Install
 
@@ -120,7 +125,7 @@ http/https image may be loaded. Network images are off by default — until you 
 remote image appears as a placeholder naming its host. The settings travel from the
 unsandboxed app into the sandboxed extensions through a small JSON file, written into each
 extension's own container: the Markdown extension reads all of it, and the book extension
-reads its one FictionBook key. EPUB/MOBI previews ignore every one of them, and never load a
+reads its one FictionBook key. No book format reads any of them, and none of them loads a
 remote image.
 
 With JavaScript rendering off, a file is shown as escaped source instead, which is handy for
@@ -230,7 +235,7 @@ the book's own cross-links (here 英文 / 中文) work as well.
 - **Remote images are opt-in, and Markdown only.** They stay off until you allow network
   images in the app's Markdown tab; while off, a remote image is a placeholder naming its
   host. Plain `http` needs that switch too — without it the transport itself refuses the
-  load. EPUB/MOBI previews never load remote images, switch or no switch.
+  load. No book format ever loads a remote image, switch or no switch.
 - **Quick Look picks one extension per type.** If another reader also previews the same
   formats, disable it while testing EBookQL.
 
@@ -243,7 +248,7 @@ MOBI parsing is by **libmobi**, licensed LGPL-3.0-or-later and vendored under
 is linked: `README-EBookQL.md` there). Note that the vendored copy comes from this author's
 own MobiFile project rather than from a pristine upstream release. It is statically linked
 into the extensions, so the vendored sources are the copy you can rebuild and relink
-against. ZIPFoundation (MIT) is used for EPUB containers.
+against. ZIPFoundation (MIT) is used for EPUB and CBZ containers.
 
 Markdown parsing embeds **marked** (MIT). The Markdown preview extension also bundles
 **Mermaid** (`@mermaid-js/tiny` 12.1.0, MIT) and **KaTeX** 0.19.0 (MIT, with its fonts under

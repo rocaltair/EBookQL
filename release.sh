@@ -44,7 +44,7 @@ ln -s /Applications "$STAGE/$APP_NAME/Applications"
 
 cat > "$STAGE/$APP_NAME/Read me first.txt" <<'TEXT'
 EBookQL — Quick Look previews and thumbnails for EPUB, MOBI, AZW, AZW3, FictionBook,
-DjVu, CBZ and CHM books, and for Markdown.
+DjVu, CBZ/CBT and CHM books, and for Markdown.
 
 1. Drag EBookQL onto the "Applications" folder in this window.
 2. Open EBookQL from the Applications folder. Once is enough: opening it registers

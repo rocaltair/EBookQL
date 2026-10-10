@@ -36,6 +36,7 @@
 				<string>com.amazon.mobi</string>
 				<string>com.rocaltair.djvu</string>
 				<string>com.rocaltair.cbz</string>
+				<string>com.rocaltair.cbt</string>
 			</array>
 			<key>QLThumbnailMinimumDimension</key>
 			<integer>16</integer>
@@ -144,6 +145,25 @@
 				</array>
 				<key>public.mime-type</key>
 				<string>application/vnd.ms-htmlhelp</string>
+			</dict>
+		</dict>
+		<dict>
+			<key>UTTypeConformsTo</key>
+			<array>
+				<string>public.data</string>
+			</array>
+			<key>UTTypeDescription</key>
+			<string>Comic Book TAR Archive</string>
+			<key>UTTypeIdentifier</key>
+			<string>com.rocaltair.cbt</string>
+			<key>UTTypeTagSpecification</key>
+			<dict>
+				<key>public.filename-extension</key>
+				<array>
+					<string>cbt</string>
+				</array>
+				<key>public.mime-type</key>
+				<string>application/vnd.comicbook+tar</string>
 			</dict>
 		</dict>
 	</array>

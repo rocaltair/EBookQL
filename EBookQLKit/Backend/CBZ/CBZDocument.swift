@@ -24,18 +24,20 @@ import ZIPFoundation
 enum CBZParseError: Error, LocalizedError {
     case notAnArchive
     case noPages
+    case rarArchive
 
     /// The detail line of the notice page (only `BookParseError` cases get a summary of
     /// their own), so it says what is actually wrong with this file.
     var errorDescription: String? {
         switch self {
-        case .notAnArchive: return "This file is not a readable ZIP archive."
+        case .notAnArchive: return "This file is not a readable ZIP or TAR archive."
+        case .rarArchive: return "This comic is a RAR archive (.cbr), which this preview does not read."
         case .noPages: return "This archive holds no page images (the pages are .jpg, .png, .gif or .webp files)."
         }
     }
 }
 
-/// One page of a CBZ.
+/// One page of a comic archive - a CBZ (ZIP) or a CBT (TAR).
 struct CBZPage {
     /// The entry's path inside the archive; doubles as the section id.
     let path: String
@@ -72,34 +74,29 @@ struct CBZDocument {
     /// Lists the pages and reads the manifest. `geometries: false` skips the per-image
     /// header read, which is what the thumbnail path wants: a Finder card needs the title.
     init(url: URL, geometries: Bool = true) throws {
-        let archive: Archive
-        do {
-            archive = try Archive(url: url, accessMode: .read)
-        } catch {
-            throw CBZParseError.notAnArchive
-        }
+        let archive = try ComicArchiveFactory.open(url)
 
-        var entries: [Entry] = []
-        var manifest: Entry?
-        for entry in archive where entry.type == .file {
+        var entries: [String] = []
+        var manifest: String?
+        for entry in archive.entries {
             if Self.isNoise(entry.path) { continue }
             if (entry.path as NSString).lastPathComponent.lowercased() == "comicinfo.xml" {
-                manifest = entry
+                manifest = entry.path
                 continue
             }
             guard Self.imageExtensions.contains(
                 (entry.path as NSString).pathExtension.lowercased()) else { continue }
-            entries.append(entry)
+            entries.append(entry.path)
         }
         guard !entries.isEmpty else { throw CBZParseError.noPages }
 
-        entries.sort { Self.readingOrder($0.path, $1.path) }
-        let listed = entries.map { entry in
-            let size = geometries ? Self.pixelSize(of: entry, in: archive) : (0, 0)
-            let name = (entry.path as NSString).lastPathComponent
-            let folder = (entry.path as NSString).deletingLastPathComponent
+        entries.sort { Self.readingOrder($0, $1) }
+        let listed = entries.map { path in
+            let size = geometries ? Self.pixelSize(of: path, in: archive) : (0, 0)
+            let name = (path as NSString).lastPathComponent
+            let folder = (path as NSString).deletingLastPathComponent
             return CBZPage(
-                path: entry.path,
+                path: path,
                 label: (name as NSString).deletingPathExtension,
                 width: size.0,
                 height: size.1,
@@ -173,46 +170,29 @@ struct CBZDocument {
     /// The pixel size of an image, from the first bytes of its header. Read here rather
     /// than through ImageIO because the data is deliberately truncated - a header and no
     /// image - and this is the code that has to know how much of a header it needs.
-    static func pixelSize(of entry: Entry, in archive: Archive) -> (Int, Int) {
-        if let header = prefix(of: entry, in: archive, limit: headerBytes),
+    static func pixelSize(of path: String, in archive: ComicArchive) -> (Int, Int) {
+        if let header = archive.prefix(of: path, limit: headerBytes),
            let size = CBZImageHeader.size(of: header) {
             return size
         }
         // A header that did not turn up in the first 64 KB: rare (a JPEG with a large EXIF
         // thumbnail), and worth one more pass before the page gets a wrong shape.
-        let whole = min(entry.uncompressedSize, 4 * 1024 * 1024)
-        if let all = prefix(of: entry, in: archive, limit: Int(whole)),
+        let whole = min(size(of: path, in: archive), 4 * 1024 * 1024)
+        if let all = archive.prefix(of: path, limit: whole),
            let size = CBZImageHeader.size(of: all) {
             return size
         }
         return (0, 0)
     }
 
-    /// Inflates only as much of an entry as asked for. The consumer cannot say "enough",
-    /// so the read is stopped by throwing out of it - which leaves the archive's file
-    /// position wherever it landed; the next read seeks first, so nothing is shared.
-    static func prefix(of entry: Entry, in archive: Archive, limit: Int) -> Data? {
-        guard limit > 0 else { return nil }
-        struct Enough: Error {}
-        var data = Data()
-        data.reserveCapacity(min(limit, 256 * 1024))
-        do {
-            try archive.extract(entry, bufferSize: 32 * 1024, skipCRC32: true) { chunk in
-                data.append(chunk)
-                if data.count >= limit { throw Enough() }
-            }
-        } catch is Enough {
-            return data
-        } catch {
-            return nil
-        }
-        return data
+    private static func size(of path: String, in archive: ComicArchive) -> Int {
+        archive.entries.first { $0.path == path }?.size ?? 0
     }
 
     // MARK: - ComicInfo.xml
 
-    private static func readManifest(_ entry: Entry, in archive: Archive) -> CBZComicInfo? {
-        guard let data = prefix(of: entry, in: archive, limit: 4 * 1024 * 1024) else { return nil }
+    private static func readManifest(_ path: String, in archive: ComicArchive) -> CBZComicInfo? {
+        guard let data = archive.prefix(of: path, limit: 4 * 1024 * 1024) else { return nil }
         return CBZComicInfo.parse(data)
     }
 }

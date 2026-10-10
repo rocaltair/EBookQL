@@ -28,17 +28,8 @@
 	<string>$(MACOSX_DEPLOYMENT_TARGET)</string>
 	<key>NSHumanReadableCopyright</key>
 	<string>EBookQL — MIT Licence. MOBI parsing by libmobi (LGPL-3.0-or-later); DjVu page decoding by DejaView (MIT).</string>
-	<!-- The MOBI family and FictionBook have no system-declared UTI, so EBookQL
-	     declares those. `.epub` is covered by org.idpf.epub-container, which the system
-	     provides. .md and .markdown are covered by net.daringfireball.markdown: EBookQL
-	     references it directly rather than declaring an own type. -->
 	<key>UTExportedTypeDeclarations</key>
 	<array>
-		<!-- FictionBook. Measured on macOS 15.8: nothing declares .fb2, so until
-		     EBookQL does, `UTType(filenameExtension: "fb2")` is a dynamic type and
-		     Quick Look has no way to know an FB2 file is a book. It is XML with
-		     base64 images inside, and it conforms to public.xml as well as
-		     public.data for that reason. -->
 		<dict>
 			<key>UTTypeConformsTo</key>
 			<array>
@@ -80,11 +71,6 @@
 				<string>application/x-mobipocket-ebook</string>
 			</dict>
 		</dict>
-		<!-- DjVu. Measured on macOS 15.8: nothing declares .djvu or .djv either, so
-		     both are dynamic types until EBookQL says otherwise. It conforms to
-		     public.data and deliberately NOT to public.image: there is no system DjVu
-		     decoder, and claiming image conformance would invite the system's image
-		     handling to claim the file. -->
 		<dict>
 			<key>UTTypeConformsTo</key>
 			<array>
@@ -105,8 +91,6 @@
 				<string>image/vnd.djvu</string>
 			</dict>
 		</dict>
-		<!-- CBZ. Nothing declares .cbz either (measured: both .cbz and .cbr are dynamic
-		     types). .cbr (RAR) and .cbt (TAR) are NOT claimed: only a ZIP is read here. -->
 		<dict>
 			<key>UTTypeConformsTo</key>
 			<array>
@@ -126,9 +110,6 @@
 				<string>application/vnd.comicbook+zip</string>
 			</dict>
 		</dict>
-		<!-- MDX has no system-declared UTI either. Conforming to
-		     net.daringfireball.markdown (and public.plain-text) means macOS still
-		     treats .mdx as Markdown when EBookQL's extension is not chosen. -->
 		<dict>
 			<key>UTTypeConformsTo</key>
 			<array>
@@ -149,11 +130,6 @@
 				<string>text/markdown</string>
 			</dict>
 		</dict>
-		<!-- CHM (Microsoft HTML Help). Measured on macOS 15.8: nothing declares .chm
-		     either, so EBookQL exports its own type. It conforms to public.data and
-		     deliberately NOT to public.html: a .chm is a compressed archive of HTML
-		     pages, not HTML, and claiming html conformance would invite a browser to
-		     claim the file. -->
 		<dict>
 			<key>UTTypeConformsTo</key>
 			<array>
@@ -171,6 +147,25 @@
 				</array>
 				<key>public.mime-type</key>
 				<string>application/vnd.ms-htmlhelp</string>
+			</dict>
+		</dict>
+		<dict>
+			<key>UTTypeConformsTo</key>
+			<array>
+				<string>public.data</string>
+			</array>
+			<key>UTTypeDescription</key>
+			<string>Comic Book TAR Archive</string>
+			<key>UTTypeIdentifier</key>
+			<string>com.rocaltair.cbt</string>
+			<key>UTTypeTagSpecification</key>
+			<dict>
+				<key>public.filename-extension</key>
+				<array>
+					<string>cbt</string>
+				</array>
+				<key>public.mime-type</key>
+				<string>application/vnd.comicbook+tar</string>
 			</dict>
 		</dict>
 	</array>

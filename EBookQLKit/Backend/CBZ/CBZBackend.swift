@@ -23,10 +23,12 @@ import os.log
 
 public final class CBZBackend: BookBackend {
 
-    public static let supportedExtensions: Set<String> = ["cbz"]
+    public static let supportedExtensions: Set<String> = ["cbz", "cbt"]
 
-    /// Resource host and path shape: `ekbres://cbz/page/<index>`. Only `.cbz` is claimed -
-    /// `.cbr` is RAR and `.cbt` is TAR, neither of which is a ZIP.
+    /// Resource host and path shape: `ekbres://cbz/page/<index>`, shared by both containers
+    /// (the namespace belongs to this backend, not to the archive flavour). `.cbt` is the same
+    /// comic in a TAR instead of a ZIP, so it renders through this same code; `.cbr` is RAR
+    /// and is not claimed at all - it is recognised only to be turned away with a reason.
     static let host = "cbz"
     static let resourcePrefix = "/page/"
 
@@ -155,7 +157,7 @@ public final class CBZResourceProvider: ResourceProvider {
 
     private let url: URL
     private let entryPaths: [String]
-    private var archive: Archive?
+    private var archive: ComicArchive?
 
     init(url: URL, entryPaths: [String]) {
         self.url = url
@@ -171,16 +173,13 @@ public final class CBZResourceProvider: ResourceProvider {
               let index = Int(path.dropFirst(CBZBackend.resourcePrefix.count)),
               entryPaths.indices.contains(index) else { return nil }
         let entryPath = entryPaths[index]
-        guard let archive = openArchive(), let entry = archive[entryPath] else { return nil }
-        var data = Data()
-        data.reserveCapacity(Int(entry.uncompressedSize))
-        guard (try? archive.extract(entry) { data.append($0) }) != nil else { return nil }
+        guard let archive = openArchive(), let data = archive.data(of: entryPath) else { return nil }
         return (data, mimeType(for: entryPath))
     }
 
-    private func openArchive() -> Archive? {
+    private func openArchive() -> ComicArchive? {
         if let archive { return archive }
-        let opened = try? Archive(url: url, accessMode: .read)
+        let opened = try? ComicArchiveFactory.open(url)
         archive = opened
         return opened
     }

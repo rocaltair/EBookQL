@@ -1,6 +1,6 @@
 # EBookQL
 
-Quick Look previews **and thumbnails** for EPUB, MOBI, AZW, AZW3, FictionBook, DjVu, CBZ and
+Quick Look previews **and thumbnails** for EPUB, MOBI, AZW, AZW3, FictionBook, DjVu, CBZ/CBT and
 CHM
 books, and for Markdown, on macOS. Select a book or a note in the Finder, press **Space**,
 read it.
@@ -102,6 +102,7 @@ script points `DEVELOPER_DIR` at Xcode itself.
 | `.fb2` | the project's own XML reader | FictionBook with its base64 images; contents are derived from the book's own sections and headings (see [FictionBook](#fictionbook)) |
 | `.djvu`, `.djv` | the project's own container reader + a vendored JavaScript page decoder | scanned pages; the file's own outline becomes the sidebar (see [DjVu](#djvu)) |
 | `.chm` | the project's own ITSF container reader + an LZX decompressor | Microsoft HTML Help: one section per topic page, contents derived from the page titles (see [CHM](#chm)) |
+| `.cbt` | the same backend, reading a TAR instead of a ZIP | the same comic in a TAR container; the two containers are told apart by their bytes, so a mislabelled `.cbz`/`.cbt` still opens |
 | `.cbz` | the project's own ZIP reader + the web view's own image loading | a ZIP of page images; its `ComicInfo.xml` supplies the title and any bookmarks (see [CBZ](#cbz)) |
 | `.mobi`, `.azw`, `.azw3` | [libmobi](https://github.com/bfabiszewski/libmobi), vendored | KF7 and KF8; images and the container's NCX table of contents are read from the file |
 | `.md`, `.markdown`, `.mdx` | JavaScriptCore + embedded [marked](https://github.com/markedjs/marked) | GFM; front matter supplies title/author; LaTeX math and mermaid diagrams render offline |

@@ -67,7 +67,7 @@ struct ContentView: View {
                 .frame(width: 52, height: 52)
             VStack(alignment: .leading, spacing: 2) {
                 Text("EBookQL").font(.title2).bold()
-                Text("Quick Look previews and thumbnails for EPUB, MOBI, AZW, AZW3, FictionBook, DjVu, CBZ, CHM and Markdown.")
+                Text("Quick Look previews and thumbnails for EPUB, MOBI, AZW, AZW3, FictionBook, DjVu, CBZ/CBT, CHM and Markdown.")
                     .foregroundStyle(.secondary)
                 Text("Select a book in the Finder and press Space to preview it.")
                     .foregroundStyle(.secondary)
@@ -88,7 +88,7 @@ struct ContentView: View {
                 Toggle("Enable CHM previews", isOn: chmBinding)
                     .help("Microsoft HTML Help (.chm). Off by default: this registers or unregisters the CHM Quick Look extensions, the same way the Markdown switch works. While it is off, .chm files are left to macOS.")
                     .help("Off, macOS falls back to its own plain-text preview for .md and .mdx. "
-                          + "The book formats — EPUB, MOBI/AZW/AZW3, FictionBook, DjVu, CBZ, CHM — have "
+                          + "The book formats — EPUB, MOBI/AZW/AZW3, FictionBook, DjVu, CBZ/CBT, CHM — have "
                           + "no switch here: Quick Look maps one file type to one extension, and "
                           + "EBookQL is the only one for them.")
             } header: {
@@ -172,7 +172,7 @@ struct ContentView: View {
                     }
                 }
                 .help("Markdown previews only. Every book format — EPUB, MOBI/AZW/AZW3, FictionBook, "
-                      + "DjVu, CBZ, CHM — keeps following the system's own light/dark appearance.")
+                      + "DjVu, CBZ/CBT, CHM — keeps following the system's own light/dark appearance.")
             } header: {
                 Text("Appearance")
             }

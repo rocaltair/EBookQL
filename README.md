@@ -200,6 +200,12 @@ Two things a `.chm` does not give you for free:
 
 ## CBZ
 
+`.cbz` is a ZIP of page images and `.cbt` is the same comic in a TAR; one backend reads both,
+because the container is the only thing that differs. Which one a file is comes from its own
+bytes rather than its name, so a `.cbt` that turns out to be a ZIP opens correctly and the
+reverse does too. `.cbr` (RAR) is not claimed and is recognised only to be turned away with a
+reason.
+
 A `.cbz` is a ZIP archive of page images — the comic convention — so its preview is the
 simplest of the lot: each page is an `<img>` loaded from the archive as you reach it, one
 decompression at a time, with the page's shape reserved from its own image header before the

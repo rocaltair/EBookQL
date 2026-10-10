@@ -60,10 +60,10 @@ enum ExtensionRegistration {
     static func survey() -> [Extension] {
         let listed = pluginkitListing()
         return [Extension(id: previewID, title: "Quick Look preview",
-                          help: "Preview panel for EPUB, MOBI, AZW, AZW3, FictionBook, DjVu and CBZ books.",
+                          help: "Preview panel for EPUB, MOBI, AZW, AZW3, FictionBook, DjVu and CBZ/CBT comics.",
                           path: listed[previewID]?.path, enabled: listed[previewID]?.enabled ?? false),
                 Extension(id: thumbnailID, title: "Finder thumbnails",
-                          help: "Finder cards for the same books: EPUB, MOBI, AZW, AZW3, FictionBook, DjVu and CBZ.",
+                          help: "Finder cards for the same books: EPUB, MOBI, AZW, AZW3, FictionBook, DjVu and CBZ/CBT.",
                           path: listed[thumbnailID]?.path, enabled: listed[thumbnailID]?.enabled ?? false),
                 Extension(id: markdownPreviewID, title: "Markdown Preview",
                           help: "Preview panel for .md, .markdown and .mdx — math and diagrams included.",

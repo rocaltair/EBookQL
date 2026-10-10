@@ -1,13 +1,14 @@
 # EBookQL
 
-Quick Look previews **and thumbnails** for EPUB, MOBI, AZW, AZW3, FictionBook, DjVu and CBZ
+Quick Look previews **and thumbnails** for EPUB, MOBI, AZW, AZW3, FictionBook, DjVu, CBZ and
+CHM
 books, and for Markdown, on macOS. Select a book or a note in the Finder, press **Space**,
 read it.
 
 ![screenshot](docs/screenshot.png)
 
-One reader UI over six parsers (an EPUB one, a libmobi-backed MOBI one, a FictionBook one, a
-DjVu one, a CBZ one, and a JavaScriptCore + `marked` Markdown one), so every format looks and
+One reader UI over seven parsers (an EPUB one, a libmobi-backed MOBI one, a FictionBook one, a
+DjVu one, a CBZ one, a CHM one, and a JavaScriptCore + `marked` Markdown one), so every format looks and
 behaves the same: the same sidebar, the same controls, the same reading position, the same
 thumbnail card. Markdown brings its own math and diagrams, and DjVu its own page decoder —
 both rendered entirely offline.
@@ -100,11 +101,12 @@ script points `DEVELOPER_DIR` at Xcode itself.
 | `.epub` | the project's own ZIP + OPF/NCX reader | zipped `.epub` |
 | `.fb2` | the project's own XML reader | FictionBook with its base64 images; contents are derived from the book's own sections and headings (see [FictionBook](#fictionbook)) |
 | `.djvu`, `.djv` | the project's own container reader + a vendored JavaScript page decoder | scanned pages; the file's own outline becomes the sidebar (see [DjVu](#djvu)) |
+| `.chm` | the project's own ITSF container reader + an LZX decompressor | Microsoft HTML Help: one section per topic page, contents derived from the page titles (see [CHM](#chm)) |
 | `.cbz` | the project's own ZIP reader + the web view's own image loading | a ZIP of page images; its `ComicInfo.xml` supplies the title and any bookmarks (see [CBZ](#cbz)) |
 | `.mobi`, `.azw`, `.azw3` | [libmobi](https://github.com/bfabiszewski/libmobi), vendored | KF7 and KF8; images and the container's NCX table of contents are read from the file |
 | `.md`, `.markdown`, `.mdx` | JavaScriptCore + embedded [marked](https://github.com/markedjs/marked) | GFM; front matter supplies title/author; LaTeX math and mermaid diagrams render offline |
 
-The MOBI family, FictionBook, DjVu and CBZ have no system-declared UTI, so the app exports one
+The MOBI family, FictionBook, DjVu, CBZ and CHM have no system-declared UTI, so the app exports one
 for each (`.djvu` is `com.rocaltair.djvu`, `.cbz` is `com.rocaltair.cbz`); the extensions also
 declare the UTIs other readers export, because which declaration wins is not under the
 extension's control. `.md` and `.markdown` use the system's own `net.daringfireball.markdown`
@@ -172,6 +174,28 @@ served one at a time, so opening a 200-page scan does not put the whole book in 
 
 DjVu is decoded with DejaView (MIT), vendored under `EBookQLPreview/DjVuAssets/`. DjVuLibre
 would have been the obvious native choice, but it is GPLv2 and this project is MIT.
+
+## CHM
+
+`.chm` (Microsoft HTML Help) is the one format whose Quick Look extensions ship **switched off** -
+the box in the app's window registers or unregisters them, the same way the Markdown switch works.
+It arrives last, it is the least-tested parser here, and turning it on is the reader's call.
+
+The container is read in Swift: the ITSF directory, then the LZX-compressed section, one page at a
+time. Pages are ordinary HTML, so a CHM renders through the same reader as an EPUB - one section per
+topic, cross-topic links resolved to in-page anchors, images and CSS served over `ekbres://chm/…`.
+
+Two things a `.chm` does not give you for free:
+
+- **Its contents.** A help file usually carries a `.hhc` tree; the one in this project's test corpus
+  does not, and the compiled "automatically generated" form is a binary structure no reader parses
+  (`chmlib` and 7-Zip both skip it). The sidebar is then built from the pages' own titles, grouped by
+  folder, and says so in a note above the list - a derived list must never pass itself off as the
+  book's own table of contents.
+- **Its encoding.** Topics are ANSI in whatever code page the compiler was given, so the page's own
+  `<meta charset>` is tried first, anything Chinese is decoded as GB18030 (files that *say* `gb2312`
+  are routinely GB18030 bytes), then Foundation's detector, then Latin-1 so a stray file stays
+  readable.
 
 ## CBZ
 
@@ -248,7 +272,9 @@ MOBI parsing is by **libmobi**, licensed LGPL-3.0-or-later and vendored under
 is linked: `README-EBookQL.md` there). Note that the vendored copy comes from this author's
 own MobiFile project rather than from a pristine upstream release. It is statically linked
 into the extensions, so the vendored sources are the copy you can rebuild and relink
-against. ZIPFoundation (MIT) is used for EPUB and CBZ containers.
+against. ZIPFoundation (MIT) is used for EPUB and CBZ containers. The CHM backend's LZX decompressor was
+written for this project from the LZX DELTA specification, following the `lzxd` crate (MIT OR
+Apache-2.0) and Apache Tika's `org.apache.tika.parser.microsoft.chm` (Apache-2.0) as references.
 
 Markdown parsing embeds **marked** (MIT). The Markdown preview extension also bundles
 **Mermaid** (`@mermaid-js/tiny` 12.1.0, MIT) and **KaTeX** 0.19.0 (MIT, with its fonts under

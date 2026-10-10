@@ -23,6 +23,7 @@ struct ContentView: View {
     @State private var extensions: [ExtensionRegistration.Extension] = []
     @State private var checked = false
     @State private var markdownEnabled = false
+    @State private var chmEnabled = false
     @State private var settings = HostSettings.defaults
 
     var body: some View {
@@ -52,6 +53,7 @@ struct ContentView: View {
             ExtensionRegistration.register()
             settings = SettingsStore.load()
             markdownEnabled = ExtensionRegistration.markdownEnabled()
+            chmEnabled = ExtensionRegistration.chmEnabled()
             refresh()
         }
     }
@@ -65,7 +67,7 @@ struct ContentView: View {
                 .frame(width: 52, height: 52)
             VStack(alignment: .leading, spacing: 2) {
                 Text("EBookQL").font(.title2).bold()
-                Text("Quick Look previews and thumbnails for EPUB, MOBI, AZW, AZW3, FictionBook, DjVu, CBZ and Markdown.")
+                Text("Quick Look previews and thumbnails for EPUB, MOBI, AZW, AZW3, FictionBook, DjVu, CBZ, CHM and Markdown.")
                     .foregroundStyle(.secondary)
                 Text("Select a book in the Finder and press Space to preview it.")
                     .foregroundStyle(.secondary)
@@ -83,8 +85,10 @@ struct ContentView: View {
         Form {
             Section {
                 Toggle("Enable Markdown previews", isOn: markdownBinding)
+                Toggle("Enable CHM previews", isOn: chmBinding)
+                    .help("Microsoft HTML Help (.chm). Off by default: this registers or unregisters the CHM Quick Look extensions, the same way the Markdown switch works. While it is off, .chm files are left to macOS.")
                     .help("Off, macOS falls back to its own plain-text preview for .md and .mdx. "
-                          + "The book formats — EPUB, MOBI/AZW/AZW3, FictionBook, DjVu, CBZ — have "
+                          + "The book formats — EPUB, MOBI/AZW/AZW3, FictionBook, DjVu, CBZ, CHM — have "
                           + "no switch here: Quick Look maps one file type to one extension, and "
                           + "EBookQL is the only one for them.")
             } header: {
@@ -133,6 +137,16 @@ struct ContentView: View {
             }
         )
     }
+    private var chmBinding: Binding<Bool> {
+        Binding(
+            get: { chmEnabled },
+            set: { newValue in
+                ExtensionRegistration.setCHMEnabled(newValue)
+                chmEnabled = ExtensionRegistration.chmEnabled()
+                refresh()
+            }
+        )
+    }
 
     // MARK: - Markdown tab
 
@@ -158,7 +172,7 @@ struct ContentView: View {
                     }
                 }
                 .help("Markdown previews only. Every book format — EPUB, MOBI/AZW/AZW3, FictionBook, "
-                      + "DjVu, CBZ — keeps following the system's own light/dark appearance.")
+                      + "DjVu, CBZ, CHM — keeps following the system's own light/dark appearance.")
             } header: {
                 Text("Appearance")
             }

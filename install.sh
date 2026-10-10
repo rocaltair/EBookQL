@@ -23,6 +23,8 @@ PREVIEW_ID=com.rocaltair.EBookQL.Preview
 THUMBNAIL_ID=com.rocaltair.EBookQL.Thumbnail
 MARKDOWN_PREVIEW_ID=com.rocaltair.EBookQL.MarkdownPreview
 MARKDOWN_THUMBNAIL_ID=com.rocaltair.EBookQL.MarkdownThumbnail
+CHM_PREVIEW_ID=com.rocaltair.EBookQL.CHMPreview
+CHM_THUMBNAIL_ID=com.rocaltair.EBookQL.CHMThumbnail
 LSREGISTER=/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister
 
 # xcodebuild needs Xcode, not the command line tools; don't touch the system
@@ -53,7 +55,9 @@ deregister_built_products() {
     for bundle in "$BUILT_APP/Contents/PlugIns/EBookQLPreview.appex" \
                   "$BUILT_APP/Contents/PlugIns/EBookQLThumbnail.appex" \
                   "$BUILT_APP/Contents/PlugIns/EBookQLMarkdownPreview.appex" \
-                  "$BUILT_APP/Contents/PlugIns/EBookQLMarkdownThumbnail.appex"; do
+                  "$BUILT_APP/Contents/PlugIns/EBookQLMarkdownThumbnail.appex" \
+                  "$BUILT_APP/Contents/PlugIns/EBookQLCHMPreview.appex" \
+                  "$BUILT_APP/Contents/PlugIns/EBookQLCHMThumbnail.appex"; do
         [ -d "$bundle" ] && pluginkit -r "$bundle" >/dev/null 2>&1 || true
     done
     [ -d "$BUILT_APP" ] && "$LSREGISTER" -u "$BUILT_APP" >/dev/null 2>&1 || true
@@ -77,12 +81,19 @@ install_app() {
     pluginkit -e use -i "$THUMBNAIL_ID"
     pluginkit -e use -i "$MARKDOWN_PREVIEW_ID"
     pluginkit -e use -i "$MARKDOWN_THUMBNAIL_ID"
+    # CHM ships off: register the appexes so pluginkit knows them, but leave them ignored
+    # until the user ticks the box in the app's window (nothing else re-enables them).
+    pluginkit -a "$INSTALLED_APP/Contents/PlugIns/EBookQLCHMPreview.appex"
+    pluginkit -a "$INSTALLED_APP/Contents/PlugIns/EBookQLCHMThumbnail.appex"
+    pluginkit -e ignore -i "$CHM_PREVIEW_ID"
+    pluginkit -e ignore -i "$CHM_THUMBNAIL_ID"
     # Verify rather than assume: the registration can be dropped again by LaunchServices
     # housekeeping (measured - the four appexes were listed right after an install and
     # gone twenty minutes later, and with no generator the Quick Look panel simply does
     # not appear). Opening the app once is the one path that always rebuilds it.
     missing=""
-    for id in "$PREVIEW_ID" "$THUMBNAIL_ID" "$MARKDOWN_PREVIEW_ID" "$MARKDOWN_THUMBNAIL_ID"; do
+    for id in "$PREVIEW_ID" "$THUMBNAIL_ID" "$MARKDOWN_PREVIEW_ID" "$MARKDOWN_THUMBNAIL_ID" \
+              "$CHM_PREVIEW_ID" "$CHM_THUMBNAIL_ID"; do
         pluginkit -m -v -i "$id" 2>/dev/null | grep -q "$id" || missing="$missing $id"
     done
     if [ -n "$missing" ]; then
@@ -99,7 +110,7 @@ status() {
     pluginkit -m -v 2>/dev/null | grep -i "$APP_NAME" || echo "  (none)"
     echo "--- how the book extensions resolve ---"
     /usr/bin/swift -e 'import UniformTypeIdentifiers
-for ext in ["epub", "mobi", "azw", "azw3", "fb2", "djvu", "djv", "cbz", "md", "markdown", "mdx"] {
+for ext in ["epub", "mobi", "azw", "azw3", "fb2", "djvu", "djv", "cbz", "chm", "md", "markdown", "mdx"] {
     print("  .\(ext) ->", UTType(filenameExtension: ext)?.identifier ?? "unknown")
 }' 2>/dev/null || true
 }
@@ -118,7 +129,9 @@ uninstall_app() {
     for bundle in "$INSTALLED_APP/Contents/PlugIns/EBookQLPreview.appex" \
                   "$INSTALLED_APP/Contents/PlugIns/EBookQLThumbnail.appex" \
                   "$INSTALLED_APP/Contents/PlugIns/EBookQLMarkdownPreview.appex" \
-                  "$INSTALLED_APP/Contents/PlugIns/EBookQLMarkdownThumbnail.appex"; do
+                  "$INSTALLED_APP/Contents/PlugIns/EBookQLMarkdownThumbnail.appex" \
+                  "$INSTALLED_APP/Contents/PlugIns/EBookQLCHMPreview.appex" \
+                  "$INSTALLED_APP/Contents/PlugIns/EBookQLCHMThumbnail.appex"; do
         [ -d "$bundle" ] && pluginkit -r "$bundle" || true
     done
     [ -d "$INSTALLED_APP" ] && "$LSREGISTER" -u "$INSTALLED_APP" || true

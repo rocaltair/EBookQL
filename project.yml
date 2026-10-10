@@ -58,6 +58,14 @@ schemes:
     build:
       targets:
         EBookQLMarkdownThumbnail: all
+  EBookQLCHMPreview:
+    build:
+      targets:
+        EBookQLCHMPreview: all
+  EBookQLCHMThumbnail:
+    build:
+      targets:
+        EBookQLCHMThumbnail: all
 
 packages:
   ZIPFoundation:
@@ -127,6 +135,18 @@ targets:
           destination: plugins
           subpath: ""
       - target: EBookQLMarkdownThumbnail
+        embed: true
+        codeSign: true
+        copy:
+          destination: plugins
+          subpath: ""
+      - target: EBookQLCHMPreview
+        embed: true
+        codeSign: true
+        copy:
+          destination: plugins
+          subpath: ""
+      - target: EBookQLCHMThumbnail
         embed: true
         codeSign: true
         copy:
@@ -272,6 +292,59 @@ targets:
           - "-lsqlite3"
         HEADER_SEARCH_PATHS:
           - "$(SRCROOT)/EBookQLKit/Vendor/libmobi"
+    dependencies:
+      - target: EBookQLKit
+      - package: ZIPFoundation
+
+  # CHM-only sibling of EBookQLPreview.appex. .chm is off by default: the user turns it on in the
+  # app's window, which is what flips these two appexes between pluginkit's ignore and use.
+  EBookQLCHMPreview:
+    type: app-extension
+    platform: macOS
+    sources:
+      - path: EBookQLPreview
+        excludes: ["Info.plist", "*.entitlements", "ReaderAssets", "DjVuAssets", "AGENTS.md"]
+    settings:
+      base:
+        PRODUCT_NAME: EBookQLCHMPreview
+        PRODUCT_BUNDLE_IDENTIFIER: com.rocaltair.EBookQL.CHMPreview
+        INFOPLIST_FILE: EBookQLCHMPreview/Info.plist
+        CODE_SIGN_ENTITLEMENTS: EBookQLCHMPreview/EBookQLCHMPreview.entitlements
+        ENABLE_HARDENED_RUNTIME: YES
+        OTHER_LDFLAGS:
+          - "-framework"
+          - "WebKit"
+          - "-framework"
+          - "JavaScriptCore"
+          - "-framework"
+          - "QuickLookUI"
+          - "-Wl,-needed_framework,QuickLookUI"
+          - "-lxml2"
+          - "-lz"
+          - "-lsqlite3"
+        HEADER_SEARCH_PATHS:
+          - "$(SRCROOT)/EBookQLKit/Vendor/libmobi"
+    dependencies:
+      - target: EBookQLKit
+      - package: ZIPFoundation
+
+  # CHM-only sibling of EBookQLThumbnail.appex. .chm is off by default: the user turns it on in the
+  # app's window, which is what flips these two appexes between pluginkit's ignore and use.
+  EBookQLCHMThumbnail:
+    type: app-extension
+    platform: macOS
+    sources:
+      - path: EBookQLThumbnail
+        excludes: ["Info.plist", "*.entitlements", "AGENTS.md"]
+    settings:
+      base:
+        PRODUCT_NAME: EBookQLCHMThumbnail
+        PRODUCT_BUNDLE_IDENTIFIER: com.rocaltair.EBookQL.CHMThumbnail
+        INFOPLIST_FILE: EBookQLCHMThumbnail/Info.plist
+        HEADER_SEARCH_PATHS:
+          - "$(SRCROOT)/EBookQLKit/Vendor/libmobi"
+        CODE_SIGN_ENTITLEMENTS: EBookQLCHMThumbnail/EBookQLCHMThumbnail.entitlements
+        ENABLE_HARDENED_RUNTIME: YES
     dependencies:
       - target: EBookQLKit
       - package: ZIPFoundation

@@ -32,10 +32,8 @@
 				<string>com.apple.ibooks.epub</string>
 				<string>com.rocaltair.mobi</string>
 				<string>com.rocaltair.fb2</string>
-				<!-- See the note in EBookQLPreview/Info.plist. -->
 				<string>gkr.mobi.quicklook</string>
 				<string>com.amazon.mobi</string>
-				<!-- DjVu and CBZ: EBookQL's own types, since nothing on macOS declares them. -->
 				<string>com.rocaltair.djvu</string>
 				<string>com.rocaltair.cbz</string>
 			</array>
@@ -127,6 +125,25 @@
 				</array>
 				<key>public.mime-type</key>
 				<string>application/vnd.comicbook+zip</string>
+			</dict>
+		</dict>
+		<dict>
+			<key>UTTypeConformsTo</key>
+			<array>
+				<string>public.data</string>
+			</array>
+			<key>UTTypeDescription</key>
+			<string>Microsoft HTML Help</string>
+			<key>UTTypeIdentifier</key>
+			<string>com.rocaltair.chm</string>
+			<key>UTTypeTagSpecification</key>
+			<dict>
+				<key>public.filename-extension</key>
+				<array>
+					<string>chm</string>
+				</array>
+				<key>public.mime-type</key>
+				<string>application/vnd.ms-htmlhelp</string>
 			</dict>
 		</dict>
 	</array>

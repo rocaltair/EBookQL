@@ -20,8 +20,14 @@ enum ExtensionRegistration {
     static let thumbnailID = "com.rocaltair.EBookQL.Thumbnail"
     static let markdownPreviewID = "com.rocaltair.EBookQL.MarkdownPreview"
     static let markdownThumbnailID = "com.rocaltair.EBookQL.MarkdownThumbnail"
+    /// The CHM pair. Off by default: registered so pluginkit knows them, ignored until the
+    /// user ticks the box (see `setCHMEnabled`).
+    static let chmPreviewID = "com.rocaltair.EBookQL.CHMPreview"
+    static let chmThumbnailID = "com.rocaltair.EBookQL.CHMThumbnail"
 
-    private static let allIDs = [previewID, thumbnailID, markdownPreviewID, markdownThumbnailID]
+    private static let allIDs = [previewID, thumbnailID, markdownPreviewID, markdownThumbnailID,
+                                 chmPreviewID, chmThumbnailID]
+    private static let chmIDs = [chmPreviewID, chmThumbnailID]
 
     private static let pluginkit = "/usr/bin/pluginkit"
     private static let lsregister =
@@ -64,7 +70,13 @@ enum ExtensionRegistration {
                           path: listed[markdownPreviewID]?.path, enabled: listed[markdownPreviewID]?.enabled ?? false),
                 Extension(id: markdownThumbnailID, title: "Markdown Thumbnail",
                           help: "Finder cards for .md, .markdown and .mdx.",
-                          path: listed[markdownThumbnailID]?.path, enabled: listed[markdownThumbnailID]?.enabled ?? false)]
+                          path: listed[markdownThumbnailID]?.path, enabled: listed[markdownThumbnailID]?.enabled ?? false),
+                Extension(id: chmPreviewID, title: "CHM Preview",
+                          help: "Preview panel for .chm help files. Off until this is switched on.",
+                          path: listed[chmPreviewID]?.path, enabled: listed[chmPreviewID]?.enabled ?? false),
+                Extension(id: chmThumbnailID, title: "CHM Thumbnail",
+                          help: "Finder cards for .chm help files.",
+                          path: listed[chmThumbnailID]?.path, enabled: listed[chmThumbnailID]?.enabled ?? false)]
     }
 
     /// Ask the system to take this copy of the app, then make sure it is switched on -
@@ -77,7 +89,10 @@ enum ExtensionRegistration {
             run(pluginkit, ["-a", appex])
         }
         for id in allIDs where pluginkitListing()[id] == nil {
-            run(pluginkit, ["-e", "use", "-i", id])
+            // Registering an extension is not the same as switching it on: CHM ships off, so
+            // the first sight of its appexes leaves them ignored (the box in the window is
+            // what turns them on, and nothing here overrides that afterwards).
+            run(pluginkit, ["-e", chmIDs.contains(id) ? "ignore" : "use", "-i", id])
         }
     }
 
@@ -106,6 +121,29 @@ enum ExtensionRegistration {
         }
     }
 
+    /// True only when both CHM extensions are registered and switched on.
+    static func chmEnabled() -> Bool {
+        let listed = pluginkitListing()
+        return listed[chmPreviewID]?.enabled == true && listed[chmThumbnailID]?.enabled == true
+    }
+
+    /// Switch both CHM extensions on or off, registering the appexes first when the system
+    /// has never seen them. Off is the shipped default.
+    static func setCHMEnabled(_ enabled: Bool) {
+        let listed = pluginkitListing()
+        for (id, appexName) in [(chmPreviewID, "EBookQLCHMPreview.appex"),
+                                (chmThumbnailID, "EBookQLCHMThumbnail.appex")] {
+            if enabled {
+                if listed[id] == nil, let appex = appexPath(named: appexName) {
+                    run(pluginkit, ["-a", appex])
+                }
+                run(pluginkit, ["-e", "use", "-i", id])
+            } else {
+                run(pluginkit, ["-e", "ignore", "-i", id])
+            }
+        }
+    }
+
     /// Open the pane where a switched-off extension can be turned back on.
     static func openSettings() {
         let url = URL(string: "x-apple.systempreferences:com.apple.LoginItems-Settings.extension")!
@@ -117,7 +155,8 @@ enum ExtensionRegistration {
     private static func appexPaths() -> [String] {
         guard let plugins = Bundle.main.builtInPlugInsURL else { return [] }
         return ["EBookQLPreview.appex", "EBookQLThumbnail.appex",
-                "EBookQLMarkdownPreview.appex", "EBookQLMarkdownThumbnail.appex"]
+                "EBookQLMarkdownPreview.appex", "EBookQLMarkdownThumbnail.appex",
+                "EBookQLCHMPreview.appex", "EBookQLCHMThumbnail.appex"]
             .map { plugins.appendingPathComponent($0).path }
             .filter { FileManager.default.fileExists(atPath: $0) }
     }

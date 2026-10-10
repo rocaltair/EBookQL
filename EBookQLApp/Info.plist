@@ -149,6 +149,30 @@
 				<string>text/markdown</string>
 			</dict>
 		</dict>
+		<!-- CHM (Microsoft HTML Help). Measured on macOS 15.8: nothing declares .chm
+		     either, so EBookQL exports its own type. It conforms to public.data and
+		     deliberately NOT to public.html: a .chm is a compressed archive of HTML
+		     pages, not HTML, and claiming html conformance would invite a browser to
+		     claim the file. -->
+		<dict>
+			<key>UTTypeConformsTo</key>
+			<array>
+				<string>public.data</string>
+			</array>
+			<key>UTTypeDescription</key>
+			<string>Microsoft HTML Help</string>
+			<key>UTTypeIdentifier</key>
+			<string>com.rocaltair.chm</string>
+			<key>UTTypeTagSpecification</key>
+			<dict>
+				<key>public.filename-extension</key>
+				<array>
+					<string>chm</string>
+				</array>
+				<key>public.mime-type</key>
+				<string>application/vnd.ms-htmlhelp</string>
+			</dict>
+		</dict>
 	</array>
 </dict>
 </plist>

@@ -230,6 +230,25 @@ stops the tree closing anything behind you, if you would rather it only ever ope
 link or an image names its target in a strip at the foot of the page. In a bilingual edition
 the book's own cross-links (here 英文 / 中文) work as well.
 
+## From the shell
+
+Pressing space in Finder is how a preview gets judged, but when you would rather type:
+
+```zsh
+function quick-look-open() {
+        # for zsh
+        qlmanage -p $@ 2>&1 > /dev/null &!
+}
+alias ql=quick-look-open
+```
+
+`ql <file>` opens the panel and returns your prompt immediately (`&!` disowns it; the
+redirection swallows `qlmanage`'s own chatter). One caveat worth knowing: `qlmanage` draws its
+**own** preview window out of the legacy generator database, so what it shows is not always what
+Finder's panel shows, and it will sit there saying nothing when no extension claims the type —
+a `.chm` with the CHM extensions switched off, for instance. Finder remains the judge; this is a
+convenience, not a test.
+
 ## Known limitations
 
 - **Very large MOBI bodies are cut at 8 MB of text.** Reference works can go past that; the

@@ -1,12 +1,15 @@
-# EBookQL — Quick Look preview + thumbnail extensions for EPUB and MOBI (Kindle) books.
+# EBookQL — a reader app plus Quick Look preview + thumbnail extensions for EPUB, MOBI,
+# FictionBook, DjVu, CBZ/CBT, CHM and Markdown.
 #
 #   xcodegen generate      # writes EBookQL.xcodeproj from this file
 #   ./install.sh           # build a Release app and copy it to /Applications
 #
-# Four targets: the host application that carries the extensions, a Quick Look
-# preview extension, a Quick Look thumbnail extension, and the shared framework
-# (EBookQLKit) that holds every format backend, the reader page and the reading
-# position store. Edit this file, not the generated project.
+# Targets: the host application (reader windows + settings window, carrying the six
+# appexes), three Quick Look preview extensions (books, Markdown, CHM), three thumbnail
+# extensions, and the static library EBookQLKit that holds every format backend, the
+# reader page and the reading-position store. EBookQLReader/ is a folder of shared
+# sources - the WKWebView reader host plus the ekbres:// handler - compiled into the app
+# and into all three preview appexes. Edit this file, not the generated project.
 
 name: EBookQL
 
@@ -102,20 +105,52 @@ targets:
     dependencies:
       - package: ZIPFoundation
 
-  # Host application: exists to carry the two extensions and to declare the UTIs.
+  # Host application: carries the extensions, declares the UTIs, opens books in reader
+  # windows, and holds the settings window.
   EBookQL:
     type: application
     platform: macOS
     sources:
       - path: EBookQLApp
         excludes: ["Info.plist"]
+      # The reader host, shared with the preview appexes: one WKWebView controller, one
+      # ekbres:// handler, so the app and Quick Look cannot drift apart.
+      - path: EBookQLReader
+      # The vendored reader assets have to sit at the app bundle root for
+      # `ekbres://assets/<bare filename>` to find them, exactly as they do in the
+      # Markdown and (for DjVu) the preview appex.
+      #
+      # NOTICES.md is excluded from both: the two folders ship a file of that name and
+      # a flat resource phase cannot hold two. Nothing is lost - the nested
+      # EBookQLMarkdownPreview.appex carries the Mermaid/KaTeX notices and
+      # EBookQLPreview.appex the DejaView one, and both are inside this bundle.
+      - path: EBookQLPreview/ReaderAssets
+        buildPhase: resources
+        excludes: ["AGENTS.md", "NOTICES.md"]
+      - path: EBookQLPreview/DjVuAssets
+        buildPhase: resources
+        excludes: ["AGENTS.md", "NOTICES.md"]
     settings:
       base:
         PRODUCT_NAME: EBookQL
         PRODUCT_BUNDLE_IDENTIFIER: com.rocaltair.EBookQL
         INFOPLIST_FILE: EBookQLApp/Info.plist
         COMBINE_HIDPI_IMAGES: YES
+        OTHER_LDFLAGS:
+          - "-framework"
+          - "WebKit"
+          - "-framework"
+          - "JavaScriptCore"
+          # libmobi (vendored in EBookQLKit) needs both; a static library cannot
+          # link, so every consumer does it.
+          - "-lxml2"
+          - "-lz"
+          - "-lsqlite3"
+        HEADER_SEARCH_PATHS:
+          - "$(SRCROOT)/EBookQLKit/Vendor/libmobi"
     dependencies:
+      - target: EBookQLKit
+      - package: ZIPFoundation
       - target: EBookQLPreview
         embed: true
         codeSign: true
@@ -163,6 +198,7 @@ targets:
         # the reader finds it at the appex bundle root by bare filename.
         # DjVuAssets is added below as resources instead of compiled-in sources.
         excludes: ["Info.plist", "*.entitlements", "ReaderAssets", "DjVuAssets", "AGENTS.md"]
+      - path: EBookQLReader
       # The DjVu page decoder: the vendored JavaScript rasteriser (ZP/BZZ, JB2, IW44,
       # MMR, the container and the compositor) plus the reader's own glue. It ships
       # only here - no other appex can be handed a .djvu - and lands flat at the appex
@@ -240,6 +276,7 @@ targets:
     sources:
       - path: EBookQLPreview
         excludes: ["Info.plist", "*.entitlements", "ReaderAssets", "DjVuAssets", "AGENTS.md"]
+      - path: EBookQLReader
       - path: EBookQLPreview/ReaderAssets
         buildPhase: resources
         # NOTICES.md is a payload (licence notices); its sibling AGENTS.md is not.
@@ -304,6 +341,7 @@ targets:
     sources:
       - path: EBookQLPreview
         excludes: ["Info.plist", "*.entitlements", "ReaderAssets", "DjVuAssets", "AGENTS.md"]
+      - path: EBookQLReader
     settings:
       base:
         PRODUCT_NAME: EBookQLCHMPreview

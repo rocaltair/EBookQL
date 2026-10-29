@@ -1,6 +1,6 @@
 # EBookQLKit
 
-**Static library.** The entire format-neutral core: parsers, model, HTML synthesis, position store. Both appex targets depend on it; it depends on nothing app-level.
+**Static library.** The entire format-neutral core: parsers, model, HTML synthesis, position store. All six appex targets and the app depend on it; it depends on nothing app-level, and it links no WebKit (the reader host lives in `EBookQLReader/`).
 
 ## STRUCTURE
 ```
@@ -53,11 +53,11 @@ EBookQLKit/
 - Building NCX TOC trees from level/rank → wrong depth (rank is a category, not depth). Use `parent` pointers; accept only `parent < selfIndex`; never drop empty-title nodes (splice children up).
 - Forgetting the cross-format TOC-selection rule in a new backend.
 - Touching `Vendor/libmobi/**`.
-- Carrying the vendored Mermaid/KaTeX assets in the static lib or the shared EPUB/MOBI appex; they belong only in `EBookQLMarkdownPreview.appex`.
-- Carrying `EBookQLPreview/DjVuAssets/` anywhere but `EBookQLPreview.appex` (and never in the static lib, which has no resources).
+- Carrying the vendored Mermaid/KaTeX assets in the static lib or the shared EPUB/MOBI appex; they belong only in `EBookQLMarkdownPreview.appex` and in the app bundle.
+- Carrying `EBookQLPreview/DjVuAssets/` anywhere but `EBookQLPreview.appex` and the app bundle (and never in the static lib, which has no resources).
 - Decoding a DjVu page in Swift, or handing the whole document to the page for a document whose pages are self-contained (the per-page route is what keeps a 200-page scan out of the web view's memory).
 
 ## NOTES
 - `ReaderAssets` is the one place reader HTML/CSS/JS live (a static lib bundles no resources).
-- Markdown's runtime assets (Mermaid, KaTeX) likewise ship only in `EBookQLMarkdownPreview.appex` (`EBookQLPreview/ReaderAssets/`), reached over `ekbres://assets/`.
-- `ReadingPositionStore` is a process-wide singleton; schema + path are in DESIGN.md §8.
+- Markdown's runtime assets (Mermaid, KaTeX) likewise ship only in `EBookQLMarkdownPreview.appex` and the app (`EBookQLPreview/ReaderAssets/`), reached over `ekbres://assets/`. The app carries them because it hosts the same reader; both bundles keep them flat at the resource root, and both `NOTICES.md` files are excluded from the app since one flat phase cannot hold two files of that name.
+- `ReadingPositionStore.shared` is the process-wide default; `init(databasePath:)` lets a host name the file. The app passes the preview appex's path (`SettingsStore.sharedPositionsPath`) so one book keeps one position across Quick Look and the app. Schema is in DESIGN.md §8.

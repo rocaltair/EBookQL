@@ -88,7 +88,7 @@ install_app() {
     pluginkit -e ignore -i "$CHM_PREVIEW_ID"
     pluginkit -e ignore -i "$CHM_THUMBNAIL_ID"
     # Verify rather than assume: the registration can be dropped again by LaunchServices
-    # housekeeping (measured - the four appexes were listed right after an install and
+    # housekeeping (measured - the appexes were listed right after an install and
     # gone twenty minutes later, and with no generator the Quick Look panel simply does
     # not appear). Opening the app once is the one path that always rebuilds it.
     missing=""

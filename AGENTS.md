@@ -10,7 +10,7 @@ EBookQL is a macOS Quick Look preview + thumbnail extension for EPUB / MOBI / AZ
 ## STRUCTURE
 ```
 EBookQL/
-├── project.yml            # XcodeGen source of truth (host + static lib + 4 appexes); edit this, NOT the .xcodeproj
+├── project.yml            # XcodeGen source of truth (app + static lib + 6 appexes); edit this, NOT the .xcodeproj
 ├── EBookQLKit/            # static lib: all parsing + rendering + storage (~77% of first-party code)
 │   ├── Model/Book.swift   # Book / BookMetadata / BookSection / TOCEntry / ReadingPosition
 │   ├── Backend/           # BookBackend protocol + EPUB + MOBI + FB2 + DjVu + CBZ + Markdown parsers
@@ -18,12 +18,13 @@ EBookQL/
 │   ├── Store/             # ReadingPositionStore (SQLite)
 │   └── Vendor/libmobi/    # vendored LGPL C — never edit
 ├── EBookQLPreview/        # EPUB/MOBI/AZW/AZW3/FB2/DjVu preview appex (WKWebView + ekbres://)
-│   ├── ReaderAssets/      # vendored Mermaid/KaTeX, shipped ONLY in the Markdown appex
-│   └── DjVuAssets/        # vendored JavaScript DjVu decoder + reader glue (ships only here)
+│   ├── ReaderAssets/      # vendored Mermaid/KaTeX, shipped ONLY in the Markdown appex and the app
+│   └── DjVuAssets/        # vendored JavaScript DjVu decoder + reader glue (ships only here and in the app)
 ├── EBookQLThumbnail/      # EPUB/MOBI/AZW/AZW3/FB2/DjVu thumbnail appex
 ├── EBookQLMarkdownPreview/   # Markdown-only preview appex (Info.plist + entitlements; sources shared from EBookQLPreview/)
 ├── EBookQLMarkdownThumbnail/ # Markdown-only thumbnail appex (Info.plist + entitlements; sources shared from EBookQLThumbnail/)
-├── EBookQLApp/            # host app: configuration window + carries/registers the 4 appexes
+├── EBookQLReader/         # reader host shared by the app and the 3 preview appexes (WebView + ekbres://)
+├── EBookQLApp/            # host app: reader windows + settings window + carries/registers the 6 appexes
 ├── install.sh             # build/install/status/history/uninstall
 └── release.sh             # DMG packaging
 ```
@@ -37,21 +38,24 @@ EBookQL/
 | CBZ archive, page order, ComicInfo, page bytes | EBookQLKit/Backend/CBZ/ | see Backend/AGENTS.md; pages are plain images |
 | What DjVu and CBZ share | EBookQLKit/Backend/PageImageBook.swift | sections, page box, contents rule |
 | The DjVu page decoder the web view runs | EBookQLPreview/DjVuAssets/ | see that dir's AGENTS.md |
-| Bundled Mermaid / KaTeX assets | EBookQLPreview/ReaderAssets/ | shipped only in the Markdown appex; see that dir's AGENTS.md |
+| Bundled Mermaid / KaTeX assets | EBookQLPreview/ReaderAssets/ | shipped in the Markdown appex and the app; see that dir's AGENTS.md |
 | Markdown theme / JS-render settings | EBookQLApp/SettingsStore.swift + EBookQLPreview/ReaderPreferences.swift | `settings.json` in the Markdown appex container |
 | Reader page, TOC sidebar, CSS/JS, theme | EBookQLKit/Reader/ | see Reader/AGENTS.md |
 | Reading-position persistence | EBookQLKit/Store/ReadingPositionStore.swift | SQLite, one table |
-| Preview window, zoom, scheme | EBookQLPreview/ | see EBookQLPreview/AGENTS.md |
+| Reader host (WebView, messages, position, zoom) | EBookQLReader/ | shared by the app and the preview appexes; see its AGENTS.md |
+| Quick Look entry point, panel size | EBookQLPreview/ReaderPreviewProvider.swift | thin adapter; see EBookQLPreview/AGENTS.md |
+| Open a book in the app, reader windows, Open… | EBookQLApp/ReaderWindows.swift | one window per book URL, deduplicated |
+| Settings window (AppKit-hosted SwiftUI) | EBookQLApp/SettingsWindow.swift | created on demand, not by a SwiftUI scene |
 | Markdown-only appexes | EBookQLMarkdownPreview/ + EBookQLMarkdownThumbnail/ | Info.plist + entitlements only; sources shared from the EPUB/MOBI appexes |
 | Thumbnail card drawing | EBookQLThumbnail/ThumbnailProvider.swift | CoreGraphics card |
-| Extension registration / status UI | EBookQLApp/ | pluginkit / lsregister; 4 appexes |
+| Extension registration / status UI | EBookQLApp/ | pluginkit / lsregister; 6 appexes |
 | Build targets, linking, signing | project.yml | xcodegen generates the .xcodeproj |
 | Design decisions + trap history | DESIGN.md | gitignored journal (Chinese) — authoritative |
 
 ## CODE MAP
 | Symbol | Type | Location | Role |
 |--------|------|----------|------|
-| `BookOpener` | enum | Kit/Backend/BookBackend.swift:58 | format→backend dispatch (`backends = [EPUB, MOBI, Markdown]`) |
+| `BookOpener` | enum | Kit/Backend/BookBackend.swift:58 | format→backend dispatch (`backends = [EPUB, MOBI, FB2, DjVu, CBZ, CHM, Markdown]`) |
 | `BookBackend` | protocol | Kit/Backend/BookBackend.swift:34 | `url → Book`, plus `markdownRendering` overload |
 | `Book` / `BookSection` / `TOCEntry` / `BookMetadata` | structs | Kit/Model/Book.swift | format-neutral model (`BookFormat.markdown`) |
 | `EPUBBackend` | class | Kit/Backend/EPUB/EPUBBackend.swift:21 | ZIP + OPF/NCX parser |
@@ -68,19 +72,27 @@ EBookQL/
 | `MarkdownAssets` | enum | Kit/Backend/Markdown/MarkdownAssets.swift:17 | marked UMD + bootstrap as Swift string literals |
 | `MarkdownTheme` | enum | Kit/Reader/ReaderTheme.swift:15 | system/light/dark; the settings wire format |
 | `ReaderDocument.build` | func | Kit/Reader/ReaderDocument.swift:57 | `Book` → single HTML page; emits `data-theme` for Markdown |
+| `BookReaderViewController` | class | Reader/BookReaderViewController.swift:19 | the reader host: WKWebView, messages, position, zoom, temp dirs |
+| `ReaderSchemeHandler` | class | Reader/ReaderSchemeHandler.swift:17 | `ekbres://` scheme for both the app and the appexes |
+| `ReaderSettings` | struct | Reader/ReaderSettings.swift:12 | what a host feeds the reader (jsParse/theme/… ) |
+| `ReaderWindows` | class | EBookQLApp/ReaderWindows.swift:21 | app: one NSWindow per book, Open…, settings reload |
+| `SettingsWindow` | class | EBookQLApp/SettingsWindow.swift:15 | app: the configuration window |
 | `HTMLNormalizer` | enum | Kit/Reader/HTMLNormalizer.swift:16 | anchor prefix / link rewrite / body extract |
 | `ReaderAssets.css` / `.js` | enum | Kit/Reader/ReaderAssets.swift:17 / :216 | the entire reader UI (string literals) |
 | `ReadingPositionStore` | class | Kit/Store/ReadingPositionStore.swift:24 | SQLite positions, shared singleton |
 | `SettingsStore` / `HostSettings` | enum / struct | EBookQLApp/SettingsStore.swift:38 / :31 | host writes `settings.json` into the Markdown appex container |
 | `ReaderPreferences` | struct | EBookQLPreview/ReaderPreferences.swift:21 | sandboxed appex reads settings, falls back to defaults |
-| `ExtensionRegistration` | enum | EBookQLApp/ExtensionRegistration.swift:18 | registers/surveys all 4 appexes; `markdownEnabled` / `setMarkdownEnabled` |
-| `ReaderPreviewProvider` | class | EBookQLPreview/ReaderPreviewProvider.swift:21 | QLPreviewingController + WKWebView |
+| `ExtensionRegistration` | enum | EBookQLApp/ExtensionRegistration.swift:18 | registers/surveys all 6 appexes; `markdownEnabled` / `setMarkdownEnabled` |
+| `ReaderPreviewProvider` | class | EBookQLPreview/ReaderPreviewProvider.swift:14 | QLPreviewingController over `BookReaderViewController` |
 | `ReaderSchemeHandler` | class | EBookQLPreview/ReaderSchemeHandler.swift | `ekbres://` resource serving, incl. `assets` host |
 | `ThumbnailProvider` | class | EBookQLThumbnail/ThumbnailProvider.swift:18 | QLThumbnailProvider card |
 
 ## CONVENTIONS
 - Swift 5.0, macOS 14.0+, universal (arm64 + x86_64). No SwiftPM manifest; ZIPFoundation is declared in `project.yml`.
 - No tests, no linter/formatter, no CI. Style is set by the existing files.
+- The app is a reader as well as a configuration window: `CFBundleDocumentTypes` claims all seven formats as `Viewer` / `LSHandlerRank: Alternate`, so EBookQL appears in *Open With* without taking over the default handler, and Quick Look (Space) is untouched.
+- One reader implementation: `EBookQLReader/` is compiled into the app and into `EBookQLPreview`, `EBookQLMarkdownPreview` and `EBookQLCHMPreview`. Never fork it per host.
+- The reading-position database is shared: the app passes `SettingsStore.sharedPositionsPath` (the preview appex's container), so a book resumes where it was left in either host. Same for settings - the app reads `SettingsStore` directly and the appexes read `settings.json`.
 - Core is `library.static` on purpose: an ad-hoc-signed appex cannot load an embedded dylib ("different Team IDs"). Do NOT convert EBookQLKit to a framework.
 - A static lib carries no resources → reader CSS/JS live as Swift string literals in `ReaderAssets.swift`.
 - Strict one-way layering: Backend → Model → Reader → Preview/Thumbnail → Store. Backends never touch UI.
@@ -98,6 +110,9 @@ EBookQL/
 
 ## ANTI-PATTERNS (THIS PROJECT)
 - Hand-edit `EBookQL.xcodeproj` (generated, gitignored). Edit `project.yml`, run `xcodegen generate`.
+- Claiming `LSHandlerRank: Owner` for a book format: that would take the double-click away from the reader's current app. Alternate only.
+- Copying a same-named resource into the app from both `ReaderAssets/` and `DjVuAssets/` (the two `NOTICES.md`): the flat resource phase cannot hold both; they ship inside the nested appexes instead.
+- Expecting a SwiftUI scene to create the app's windows: the settings window and reader windows are AppKit windows the app owns (measured: a scene created no window on this toolchain).
 - Remove `-Wl,-needed_framework,QuickLookUI` from the preview appex — the extension crashes in `EXConcreteExtensionContextVendor`.
 - Set `CODE_SIGN_INJECT_BASE_ENTITLEMENTS: YES` / `get-task-allow` — Quick Look stamps the extension `[DEBUG]`.
 - Call `mobi_parse_rawml` — SIGSEGV: the vendored libmobi leaves resource data NULL. Use `first_resource_record + uid`.
@@ -107,9 +122,9 @@ EBookQL/
 - Omit `tocIsFallback: true` from a backend's TOC decision — documented cross-format repeat-regression (DESIGN.md §12.6).
 - Edit anything under `EBookQLKit/Vendor/libmobi/` (third-party, modified upstream).
 - Validate with `qlmanage` — it uses the old generator DB and shows a misleading `[DEBUG]` badge; Finder is the judge.
-- Put `EBookQLPreview/ReaderAssets/` back into the shared `EBookQLPreview.appex`: only `EBookQLMarkdownPreview.appex` may carry it (the static Kit cannot bundle resources).
+- Put `EBookQLPreview/ReaderAssets/` back into the shared `EBookQLPreview.appex` or into `EBookQLCHMPreview.appex`: only `EBookQLMarkdownPreview.appex` and the app carry it (the static Kit cannot bundle resources).
 - Route the settings channel through App Groups or `UserDefaults`: the unsandboxed host writes `settings.json` into the sandboxed Markdown appex's own container. App Groups need a provisioning profile and can silently fail under ad-hoc signing.
-- Register the app without its appexes, or trust `pluginkit -a`'s exit status. A bare `lsregister -f` leaves the nested appexes out of the LaunchServices database (`Extension … not found in LS database`), the four records are then dropped again, and with no generator the Quick Look panel simply does not appear — measured after one install that looked fine. `install.sh` registers with `-R -trusted` and verifies all four ids afterwards, naming "open the app once" as the remedy.
+- Register the app without its appexes, or trust `pluginkit -a`'s exit status. A bare `lsregister -f` leaves the nested appexes out of the LaunchServices database (`Extension … not found in LS database`), the six records are then dropped again, and with no generator the Quick Look panel simply does not appear — measured after one install that looked fine. `install.sh` registers with `-R -trusted` and verifies all six ids afterwards, naming "open the app once" as the remedy.
 
 ## UNIQUE STYLES
 - Embedded reader UI: `ReaderAssets.css` / `.js` are Swift string literals, not bundle resources.
@@ -120,7 +135,7 @@ EBookQL/
 ## COMMANDS
 ```sh
 brew install xcodegen          # once
-./install.sh                   # xcodegen + Release build + install to /Applications + register all 4 appexes
+./install.sh                   # xcodegen + Release build + install to /Applications + register all 6 appexes
 ./install.sh build             # build only (build/DerivedData)
 ./install.sh status            # registered/enabled extensions + how .epub/.mobi/.azw/.azw3/.md UTIs resolve
 ./install.sh history           # read positions.sqlite3
@@ -132,12 +147,13 @@ xcodegen generate              # regenerate the (gitignored) .xcodeproj from pro
 export DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer
 xcodebuild -project EBookQL.xcodeproj -scheme EBookQL -configuration Release -destination 'platform=macOS' -derivedDataPath build/DerivedData build
 ```
-Schemes: `EBookQL` (host), `EBookQLPreview`, `EBookQLThumbnail`, `EBookQLMarkdownPreview`, `EBookQLMarkdownThumbnail`. There is no test scheme.
+Schemes: `EBookQL` (host), `EBookQLPreview`, `EBookQLThumbnail`, `EBookQLMarkdownPreview`, `EBookQLMarkdownThumbnail`, `EBookQLCHMPreview`, `EBookQLCHMThumbnail`. There is no test scheme; `./install.sh` is the build that matters.
 
 ## NOTES
 - `build/`, `dist/`, `test-books/` (~416 MB of real books), `DESIGN.md`, and `*.xcodeproj` are gitignored working artifacts.
+- DESIGN.md §1 still says "no full reader (bookmarks/annotations/font choice)". The app now opens books, so that decision is superseded for *opening*; bookmarks and translation are still future work, and the seams for them are the reader host's injectable store and its message channel.
 - `DESIGN.md` is the authoritative design journal (Chinese) with the full trap history (§12). Read it before non-trivial changes.
 - The extension entry classes (`ReaderPreviewProvider`, `ThumbnailProvider`) are instantiated by macOS via Info.plist `NSExtensionPrincipalClass`, not by our code.
-- The host window is the configuration UI: register the two Markdown appexes (on/off via `pluginkit`), toggle "Render with JavaScript", and pick System/Light/Dark. It writes `~/Library/Containers/com.rocaltair.EBookQL.MarkdownPreview/Data/Library/Application Support/EBookQL/settings.json`; only the Markdown appex reads it.
-- Markdown assets (`mermaid.min.js`, `katex.min.js`, `katex.min.css`) live only in `EBookQLMarkdownPreview.appex` (from `EBookQLPreview/ReaderAssets/`) and are reached over `ekbres://assets/`.
-- Real verification = build, install, then select a book in Finder and press Space. `test-books/` holds sample/test files.
+- The settings window is the configuration UI: register the Quick Look appexes (on/off via `pluginkit`), toggle "Render with JavaScript", and pick System/Light/Dark. It writes `~/Library/Containers/com.rocaltair.EBookQL.MarkdownPreview/Data/Library/Application Support/EBookQL/settings.json` (and a copy into the book preview's container for the FB2 key); the appexes read it, and the app's own reader windows read `SettingsStore` directly.
+- Markdown assets (`mermaid.min.js`, `katex.min.js`, `katex.min.css`) live in `EBookQLMarkdownPreview.appex` (from `EBookQLPreview/ReaderAssets/`) and in the app bundle, and are reached over `ekbres://assets/`.
+- Real verification = build, install, then select a book in Finder and press Space (Quick Look), and `open -a /Applications/EBookQL.app <book>` (reader window). `test-books/` holds sample/test files.

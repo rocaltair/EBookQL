@@ -10,12 +10,14 @@
 //  own container (`ReaderPreferences`), which is why the path is built from the
 //  real home directory rather than `FileManager`'s.
 //
-//  Nothing here imports EBookQLKit: the host target does not link it, so
-//  `ThemeChoice` mirrors `MarkdownTheme`'s raw values instead. The JSON therefore
-//  round-trips between the two enums unchanged.
+//  Nothing here writes the reader's own state: the app's reader windows read these
+//  settings directly through `readerSettings()`, and the appexes read the JSON. The
+//  JSON still has to round-trip through two enums (ThemeChoice / MarkdownTheme), so
+//  their raw values must keep matching.
 //
 
 import Foundation
+import EBookQLKit
 
 enum ThemeChoice: String, CaseIterable {
     case system
@@ -132,5 +134,41 @@ enum SettingsStore {
                 // never run), and a failed settings write must never take the app down.
             }
         }
+        // The in-app reader is in this process, so it hears about the change here
+        // rather than by re-reading the JSON file the appexes use.
+        NotificationCenter.default.post(name: SettingsStore.didChange, object: nil)
+    }
+
+    /// Posted after `write`. An open reader window reloads its book so a theme or
+    /// rendering change is visible without closing it.
+    static let didChange = Notification.Name("com.rocaltair.EBookQL.settingsDidChange")
+
+    /// The in-app reader's view of the settings, in the reader's own terms.
+    static func readerSettings() -> ReaderSettings {
+        let s = load()
+        return ReaderSettings(
+            jsParse: s.jsParse,
+            theme: MarkdownTheme(rawValue: s.theme.rawValue) ?? .system,
+            showLineNumbers: s.showLineNumbers,
+            allowNetworkImages: s.allowNetworkImages,
+            fb2ContentsFromText: s.fb2ContentsFromText
+        )
+    }
+
+    /// The reading-position database Quick Look already fills, so a book read in the
+    /// panel resumes in the app and the other way round. Nil until the preview appex
+    /// has run at least once (its container is what the sandbox creates on first use);
+    /// the app then keeps its own history instead of inventing the container.
+    static var sharedPositionsPath: String? {
+        let data = FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent("Library", isDirectory: true)
+            .appendingPathComponent("Containers", isDirectory: true)
+            .appendingPathComponent(bookPreviewID, isDirectory: true)
+            .appendingPathComponent("Data", isDirectory: true)
+        guard FileManager.default.fileExists(atPath: data.path) else { return nil }
+        return data.appendingPathComponent("Library", isDirectory: true)
+            .appendingPathComponent("Application Support", isDirectory: true)
+            .appendingPathComponent("EBookQL", isDirectory: true)
+            .appendingPathComponent("positions.sqlite3").path
     }
 }

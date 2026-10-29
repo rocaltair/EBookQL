@@ -1,6 +1,6 @@
 # EBookQLPreview/DjVuAssets
 
-The DjVu page renderer: the vendored JavaScript decoder plus the reader's own glue. It ships ONLY in `EBookQLPreview.appex` (no other appex can be handed a `.djvu`), copied flat into the appex bundle root, where `ekbres://assets/<file>` finds a file by bare name and the modules can still `import` each other by relative path.
+The DjVu page renderer: the vendored JavaScript decoder plus the reader's own glue. It ships in `EBookQLPreview.appex` (no other appex can be handed a `.djvu`) and in the app, copied flat into the bundle root, where `ekbres://assets/<file>` finds a file by bare name and the modules can still `import` each other by relative path.
 
 ## WHERE TO LOOK
 | File | Role |
@@ -28,7 +28,8 @@ Everything except `djvu-viewer.js` is DejaView, unmodified (see NOTICES.md for t
 ## ANTI-PATTERNS
 - Editing the vendored files. If upstream needs to move, re-copy the whole set and update NOTICES.md.
 - Renaming a vendored file: the module specifiers inside DejaView are relative (`./bzz.js`), and flattening the bundle root is what keeps them valid.
-- Adding these files to `EBookQLMarkdownPreview.appex` (or to the static kit, which carries no resources at all).
+- Adding these files to `EBookQLMarkdownPreview.appex` or `EBookQLCHMPreview.appex` (or to the static kit, which carries no resources at all).
+- Renaming `NOTICES.md`: the app's flat resource phase also takes `ReaderAssets/`, which ships a file of that name, so `project.yml` excludes both from the app and lets the nested appexes carry them.
 - Serving a book page through `ReaderSchemeHandler` without `Access-Control-Allow-Origin`: an `<img>` load succeeds without it but a `fetch()` does not, and every page here is fetched.
 - Assuming a worker: anything that needs one has to be reshaped to run on the main thread.
 

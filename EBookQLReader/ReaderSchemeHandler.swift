@@ -1,11 +1,11 @@
 //
 //  ReaderSchemeHandler.swift
-//  EBookQLPreview
+//  EBookQLReader
 //
 //  Serves the resources that were never unpacked from a book - images, fonts, media -
-//  so a book full of artwork can be previewed without extracting it first. It knows
+//  so a book full of artwork can be read without extracting it first. It knows
 //  nothing about formats: either backend hands it a `ResourceSource`, and the page asks
-//  for a path.
+//  for a path. Compiled into both the app and the preview appexes.
 //
 
 import Foundation

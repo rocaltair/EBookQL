@@ -2,20 +2,44 @@
 //  Main.swift
 //  EBookQL
 //
-//  Host application: it exists to carry the extensions, to declare the UTIs,
-//  to configure the Markdown preview extension, and to show whether the
-//  extensions are actually live on this machine.
+//  Host application: it carries the extensions, declares the UTIs, opens books in a
+//  reader window, configures the preview extensions, and shows whether they are
+//  actually live on this machine.
 //
 
 import SwiftUI
 
 @main
 struct EBookQLApp: App {
+    @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
+    @StateObject private var recents = RecentBooks.shared
+
     var body: some Scene {
-        WindowGroup {
-            ContentView()
+        // An inert scene: every window this app shows is an AppKit window it owns
+        // (SettingsWindow and ReaderWindows), so the settings window and the book
+        // windows follow one rule instead of two. `Settings` never opens by itself,
+        // and its menu item is replaced below.
+        Settings {
+            EmptyView()
         }
-        .windowResizability(.contentSize)
+        .commands {
+            CommandGroup(replacing: .newItem) {
+                Button("Open…") { ReaderWindows.shared.chooseAndOpen() }
+                    .keyboardShortcut("o", modifiers: .command)
+                Menu("Open Recent") {
+                    ForEach(recents.urls, id: \.self) { url in
+                        Button(url.lastPathComponent) { ReaderWindows.shared.open(url) }
+                    }
+                    Divider()
+                    Button("Clear Menu") { recents.clear() }
+                        .disabled(recents.urls.isEmpty)
+                }
+            }
+            CommandGroup(replacing: .appSettings) {
+                Button("Settings…") { SettingsWindow.shared.show() }
+                    .keyboardShortcut(",", modifiers: .command)
+            }
+        }
     }
 }
 
@@ -58,6 +82,44 @@ struct ContentView: View {
         }
     }
 
+    /// Long explanatory strings, kept out of the view body: a chain of concatenated
+    /// literals inside `.help` was enough to blow up the type checker on this target.
+    private enum Help {
+        static let markdownToggle = "Off, macOS falls back to its own plain-text preview for "
+            + ".md and .mdx. The book formats — EPUB, MOBI/AZW/AZW3, FictionBook, DjVu, "
+            + "CBZ/CBT, CHM — have no switch here: Quick Look maps one file type to one "
+            + "extension, and EBookQL is the only one for them."
+        static let chmToggle = "Microsoft HTML Help (.chm). Off by default: this registers or "
+            + "unregisters the CHM Quick Look extensions, the same way the Markdown switch "
+            + "works. While it is off, .chm files are left to macOS. The app itself can still "
+            + "open a .chm in a reader window."
+        static let registerAgain = "Hands this copy of the app back to LaunchServices and "
+            + "pluginkit, and switches on anything the system has never seen. Press it when "
+            + "the list above points at a different EBookQL.app, or when none of the six show "
+            + "up at all."
+        static let extensionSettings = "Opens System Settings ▸ General ▸ Login Items & "
+            + "Extensions — the one place a Quick Look extension you switched off can be "
+            + "switched back on. EBookQL never re-enables one you turned off."
+        static let jsParse = "Renders the markup itself: maths, Mermaid diagrams and "
+            + "GitHub-flavoured tables. Off, the file's own source is shown instead — no "
+            + "script runs, and a very large file opens faster."
+        static let lineNumbers = "Numbers the lines of code blocks."
+        static let theme = "Markdown previews and reader windows only. Every other book "
+            + "format — EPUB, MOBI/AZW/AZW3, FictionBook, DjVu, CBZ/CBT, CHM — keeps "
+            + "following the system's own light/dark appearance."
+        static let networkImages = "Off by default: a preview that opens a network "
+            + "connection is your decision, not the app's. On, Markdown previews load remote "
+            + "images over http and https, and the strip at the foot of the page shows where "
+            + "a hovered image comes from. Off, a remote image is replaced by a placeholder "
+            + "naming its host and nothing is fetched. No book format loads a remote image, "
+            + "whatever this is set to."
+        static let fb2Contents = "Only ever used for a book that has no chapter titles at "
+            + "all — which is what .fb2 files from the usual converters look like. Their "
+            + "headings survive as text (\"Chapter 4 …\", \"Part II …\", or a bold line of "
+            + "its own) and are read back as headings. A book that has titles is never "
+            + "touched, whatever this is set to."
+    }
+
     // MARK: - Header
 
     @ViewBuilder private var header: some View {
@@ -67,9 +129,9 @@ struct ContentView: View {
                 .frame(width: 52, height: 52)
             VStack(alignment: .leading, spacing: 2) {
                 Text("EBookQL").font(.title2).bold()
-                Text("Quick Look previews and thumbnails for EPUB, MOBI, AZW, AZW3, FictionBook, DjVu, CBZ/CBT, CHM and Markdown.")
+                Text("Quick Look previews and thumbnails, and a reader window, for EPUB, MOBI, AZW, AZW3, FictionBook, DjVu, CBZ/CBT, CHM and Markdown.")
                     .foregroundStyle(.secondary)
-                Text("Select a book in the Finder and press Space to preview it.")
+                Text("Press Space in the Finder to preview, or open a book to read it.")
                     .foregroundStyle(.secondary)
             }
         }
@@ -85,14 +147,11 @@ struct ContentView: View {
         Form {
             Section {
                 Toggle("Enable Markdown previews", isOn: markdownBinding)
+                    .help(Help.markdownToggle)
                 Toggle("Enable CHM previews", isOn: chmBinding)
-                    .help("Microsoft HTML Help (.chm). Off by default: this registers or unregisters the CHM Quick Look extensions, the same way the Markdown switch works. While it is off, .chm files are left to macOS.")
-                    .help("Off, macOS falls back to its own plain-text preview for .md and .mdx. "
-                          + "The book formats — EPUB, MOBI/AZW/AZW3, FictionBook, DjVu, CBZ/CBT, CHM — have "
-                          + "no switch here: Quick Look maps one file type to one extension, and "
-                          + "EBookQL is the only one for them.")
+                    .help(Help.chmToggle)
             } header: {
-                Text("Markdown extensions")
+                Text("Quick Look extensions")
             }
 
             Section {
@@ -111,14 +170,9 @@ struct ContentView: View {
                         ExtensionRegistration.register()
                         refresh()
                     }
-                    .help("Hands this copy of the app back to LaunchServices and pluginkit, and "
-                          + "switches on anything the system has never seen. Press it when the list "
-                          + "above points at a different EBookQL.app, or when none of the four show "
-                          + "up at all.")
+                    .help(Help.registerAgain)
                     Button("Extension settings…") { ExtensionRegistration.openSettings() }
-                        .help("Opens System Settings ▸ General ▸ Login Items & Extensions — the one "
-                              + "place a Quick Look extension you switched off can be switched back "
-                              + "on. EBookQL never re-enables one you turned off.")
+                        .help(Help.extensionSettings)
                 }
             } header: {
                 Text("When something is wrong")
@@ -156,11 +210,9 @@ struct ContentView: View {
         Form {
             Section {
                 Toggle("Render with JavaScript", isOn: jsParseBinding)
-                    .help("Renders the markup itself: maths, Mermaid diagrams and "
-                          + "GitHub-flavoured tables. Off, the file's own source is shown instead "
-                          + "— no script runs, and a very large file opens faster.")
+                    .help(Help.jsParse)
                 Toggle("Show line numbers", isOn: lineNumbersBinding)
-                    .help("Numbers the lines of code blocks.")
+                    .help(Help.lineNumbers)
             } header: {
                 Text("Rendering")
             }
@@ -171,20 +223,14 @@ struct ContentView: View {
                         Text(themeLabel(theme)).tag(theme)
                     }
                 }
-                .help("Markdown previews only. Every book format — EPUB, MOBI/AZW/AZW3, FictionBook, "
-                      + "DjVu, CBZ/CBT, CHM — keeps following the system's own light/dark appearance.")
+                .help(Help.theme)
             } header: {
                 Text("Appearance")
             }
 
             Section {
                 Toggle("Allow network images", isOn: networkImagesBinding)
-                    .help("Off by default: a preview that opens a network connection is your "
-                          + "decision, not the app's. On, Markdown previews load remote images over "
-                          + "http and https, and the strip at the foot of the page shows where a "
-                          + "hovered image comes from. Off, a remote image is replaced by a "
-                          + "placeholder naming its host and nothing is fetched. No book format "
-                          + "loads a remote image, whatever this is set to.")
+                    .help(Help.networkImages)
             } header: {
                 Text("Network")
             }
@@ -201,7 +247,7 @@ struct ContentView: View {
         Form {
             Section {
                 Toggle("Guess the contents from the text", isOn: fb2ContentsBinding)
-                    .help("Only ever used for a book that has no chapter titles at all — which is what .fb2 files from the usual converters look like. Their headings survive as text (\"Chapter 4 …\", \"Part II …\", or a bold line of its own) and are read back as headings. A book that has titles is never touched, whatever this is set to.")
+                    .help(Help.fb2Contents)
             } header: {
                 Text("Contents")
             } footer: {

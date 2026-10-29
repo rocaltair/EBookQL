@@ -32,11 +32,20 @@ public final class ReadingPositionStore {
     private static let keepBooks = 5000
     private static let pruneEvery = 200
 
-    public init() {}
+    /// Nil means "this process's own Application Support directory", which is what an
+    /// appex wants: the sandbox already points that at its container. The host app is
+    /// not sandboxed, so it names the preview extension's path explicitly - that way one
+    /// book has one position whether it was read in the panel or in the app.
+    private let explicitDatabasePath: String?
+
+    public init(databasePath: String? = nil) {
+        self.explicitDatabasePath = databasePath
+    }
 
     /// Inside the extension's own container:
     /// `~/Library/Containers/<preview-bundle-id>/Data/Library/Application Support/EBookQL/positions.sqlite3`
     public var databasePath: String? {
+        if let explicitDatabasePath { return explicitDatabasePath }
         guard let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first else {
             return nil
         }

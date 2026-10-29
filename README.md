@@ -15,6 +15,11 @@ both rendered entirely offline.
 
 ## What you get
 
+- **A reader window as well as a preview** — the app opens the same seven formats with the same
+  reader: *Open With ▸ EBookQL*, `EBookQL ▸ Open…` (⌘O), Open Recent, or drag a book onto the
+  icon. One window per book, at the position you left it — the same position the Quick Look
+  panel restores. EBookQL is offered as an *alternate* handler, so Space in the Finder still
+  previews and your current reader keeps the double-click.
 - **Quick Look preview** — a full window in the Finder's Quick Look panel: the book's own
   text (or, for a scan or a comic, its pages) in a readable column, its images, and a covering
   page instead of a blank panel.
@@ -70,11 +75,12 @@ both rendered entirely offline.
 
 1. Open `EBookQL-<version>.dmg`.
 2. Drag **EBookQL** onto the **Applications** folder in that window.
-3. **Open EBookQL once.** That is what registers its four extensions: copying the app by
+3. **Open EBookQL once.** That is what registers its six extensions: copying the app by
    itself registers nothing. The window reports whether they are live, carries the
    Markdown settings, and re-registers everything on request.
 
-Then select a book or a Markdown file in the Finder and press Space.
+Then select a book or a Markdown file in the Finder and press Space to preview it, or choose
+**Open With ▸ EBookQL** to read it in a window.
 
 If the window says an extension is *switched off*, turn it on in
 **System Settings ▸ General ▸ Login Items & Extensions ▸ Quick Look**, then reopen the
@@ -84,7 +90,7 @@ Finder. EBookQL will not switch an extension back on behind your back.
 
 ```sh
 brew install xcodegen
-./install.sh              # build, install into /Applications, register all four extensions
+./install.sh              # build, install into /Applications, register all six extensions
 ./install.sh status       # what is registered, and how the book UTIs resolve
 ./install.sh history      # the reading-position database
 ./install.sh uninstall
@@ -93,6 +99,29 @@ brew install xcodegen
 `install.sh` builds Release and signs everything "Sign to Run Locally", so no Apple
 developer account is needed. If `xcode-select` points at the Command Line Tools, the
 script points `DEVELOPER_DIR` at Xcode itself.
+
+## Reading in the app
+
+The app is both the configuration window and a reader. Opening a book — from *Open With*, the
+app's **Open…** (⌘O), **Open Recent**, or by dropping it on the icon — puts it in its own
+window: the same sidebar, the same A− / A+, the same reading position as the Quick Look panel.
+Opening a book you already have open brings that window forward instead of stacking another.
+
+- The settings window is **EBookQL ▸ Settings…** (⌘,). Launching the app without a book shows it;
+  launching it with a book shows only the book, and the Dock icon brings the settings back.
+- A `.md` reader follows the **Markdown** tab — JavaScript rendering, line numbers, theme,
+  network images — and changing a setting there reloads the open Markdown windows in place.
+  A `.fb2` reader follows the **FB2** tab. The other formats keep following the system's
+  light/dark appearance.
+- A link to the web opens in your browser instead of replacing the book (Quick Look keeps its
+  own behaviour).
+- The reading position is the same SQLite file Quick Look writes, so a page read in the panel is
+  where the app reopens, and the other way round (`./install.sh history` still lists it). Before
+  the preview extension has ever run there is no such container, and the app keeps its own
+  history until there is.
+- EBookQL claims the formats as an **alternate** handler only. It never becomes the default for
+  double-clicking, and Quick Look is untouched; choose it per file from *Open With*, or make it
+  the default for one type in the Finder's Get Info panel if you want that.
 
 ## Formats
 
@@ -237,6 +266,9 @@ stops the tree closing anything behind you, if you would rather it only ever ope
 link or an image names its target in a strip at the foot of the page. In a bilingual edition
 the book's own cross-links (here 英文 / 中文) work as well.
 
+The scroll indicator on the right is the reader's own, not the system's: it stays in view,
+shows how far through the book you are, and a click anywhere on it jumps there.
+
 ## From the shell
 
 Pressing space in Finder is how a preview gets judged, but when you would rather type:
@@ -288,6 +320,13 @@ convenience, not a test.
   load. No book format ever loads a remote image, switch or no switch.
 - **Quick Look picks one extension per type.** If another reader also previews the same
   formats, disable it while testing EBookQL.
+- **The app is not the default reader.** It appears in *Open With* for all seven formats but
+  never takes the double-click or the Space bar away from whatever handles them now.
+- **A changed theme reaches open Markdown/FB2 windows by reloading them.** The book reopens at
+  the saved position, which for a very large book means a short re-render.
+- **On macOS 14 the scroll indicator can double while scrolling.** Hiding WebKit's own viewport
+  scrollbar needs `scrollbar-width` (Safari 18.2 / macOS 15.2); on older systems it fades in
+  beside the reader's own for a moment. Nothing else is affected.
 
 ## Licence
 

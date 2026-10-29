@@ -60,6 +60,16 @@ enum ReaderAssets {
     }
     html, body { margin: 0; background: var(--page-bg); color: var(--text-color); }
     body { font: -apple-system-body; line-height: 1.6; }
+    /* The reader draws its own indicator (#ekb-scrollbar, below), so WebKit's own
+       viewport scrollbar has to go: with "show scroll bars: always" it sat next to ours
+       permanently, and in the default mode it faded in beside ours while scrolling -
+       two thumbs on the same edge either way (measured, both). `scrollbar-width` is the
+       only one of the two properties that reaches the viewport scroller: with overlay
+       scrollbars WebKit ignores ::-webkit-scrollbar there, so both are set. It is not
+       inherited, so the sidebar's own #toc-scroll keeps its native bar.
+       Only the viewport: #toc-scroll's indicator is still the system's. */
+    html { scrollbar-width: none; }
+    html::-webkit-scrollbar { width: 0; height: 0; }
     /* Layout is what costs: a 402-chapter book is a 12 MB single page and a document
        millions of pixels tall, and WebKit laid the whole thing out before it could
        paint the first screen (measured: 8.75 s of an 11.4 s preview). Skipping the
@@ -184,9 +194,10 @@ enum ReaderAssets {
         background: rgba(255, 149, 0, .16); color: rgb(160, 90, 0);
     }
 
-    /* The reader's own scroll indicator: WebKit gives the panel fade-away overlay
-       scrollbars, and styling ::-webkit-scrollbar does not take over the root
-       scroller here. */
+    /* The reader's own scroll indicator. WebKit's viewport scrollbar is switched off
+       above (`html { scrollbar-width: none }`), so this is the only bar on the right:
+       it stays visible, shows the reading fraction, and jumps where it is clicked -
+       none of which the fade-away overlay scrollbar does. */
     #ekb-scrollbar {
         position: fixed; inset-block: 0; right: 0; width: 13px; z-index: 6;
         background: transparent; border-left: 1px solid var(--toc-border);

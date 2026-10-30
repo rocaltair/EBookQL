@@ -323,6 +323,29 @@ enum ReaderAssets {
         padding: 16px; overflow: auto; margin: 0 0 16px;
         background: var(--gh-subtle); border-radius: 6px; font-size: 85%; line-height: 1.45;
     }
+    /* Code-block scrollbars. The reader hides the *viewport* bar and draws its own,
+       but a block has to show a real one: with macOS's default "show scroll bars:
+       when scrolling" the system overlay bar only fades in while the block is
+       scrolled, so a shrunk or folded block looked like it simply cut the code off
+       (measured: a bare overflow:auto pre reserves 0 px for its bar in WKWebView).
+       A styled ::-webkit-scrollbar is what brings back a classic, always-drawn bar
+       - it reserves its width (10 px, measured) and WebKit still reserves nothing
+       for a block that does not overflow, so short blocks keep their full width
+       and no gate class is needed. `scrollbar-width` must stay off these blocks:
+       combined with the pseudo-element it wins and puts the overlay bar back
+       (measured: 0 px again). The thumb is inset by a transparent 2 px border so
+       the 10 px bar reads as a 6 px pill, and the track/corner stay transparent so
+       the block's own background shows through. */
+    html[data-format="markdown"] #content pre::-webkit-scrollbar { width: 10px; height: 10px; }
+    html[data-format="markdown"] #content pre::-webkit-scrollbar-track { background: transparent; }
+    html[data-format="markdown"] #content pre::-webkit-scrollbar-corner { background: transparent; }
+    html[data-format="markdown"] #content pre::-webkit-scrollbar-thumb {
+        background: var(--gh-muted); border: 2px solid transparent;
+        border-radius: 6px; background-clip: padding-box;
+    }
+    html[data-format="markdown"] #content pre::-webkit-scrollbar-thumb:hover {
+        background-color: var(--gh-accent); background-clip: padding-box;
+    }
     html[data-format="markdown"] #content code {
         font-family: var(--gh-mono); font-size: 85%;
         background: var(--gh-code-bg); padding: .2em .4em; border-radius: 6px;
@@ -349,6 +372,34 @@ enum ReaderAssets {
     html[data-format="markdown"] #content h3 { font-size: 1.25em; }
     html[data-format="markdown"] #content h6 { color: var(--gh-muted); }
 
+    /* Collapsible heading sections: a markdown-only enhancer wraps every heading
+       that is a direct child of the chapter, together with everything up to the
+       next heading of the same or a higher level, in a nested .ekb-fold div, so
+       folding one heading takes its whole subtree with it. The chevron sits in the
+       heading's left gutter (absolutely positioned, so the text never shifts),
+       stays hidden until the heading is hovered, the button is focused or its
+       section is folded, and speaks the sidebar's ▸/▾ folding language. The
+       -1.15em gutter overhang is what #content's 32px side padding leaves room
+       for. */
+    html[data-format="markdown"] #content .ekb-fold-head { position: relative; }
+    html[data-format="markdown"] #content .ekb-fold-toggle {
+        position: absolute; top: .18em; inset-inline-start: -1.15em;
+        width: 1em; height: 1.2em; padding: 0; border: 0; border-radius: .24em;
+        background: transparent; color: inherit; cursor: pointer;
+        font: inherit; font-size: .72em; line-height: 1.2em;
+        opacity: 0; transition: opacity .12s ease;
+    }
+    html[data-format="markdown"] #content .ekb-fold-head:hover .ekb-fold-toggle,
+    html[data-format="markdown"] #content .ekb-fold-toggle:focus-visible,
+    html[data-format="markdown"] #content .ekb-fold.ekb-folded > .ekb-fold-head .ekb-fold-toggle { opacity: 1; }
+    html[data-format="markdown"] #content .ekb-fold-toggle:hover { background: var(--hover-bg); }
+    /* Only the section's body folds away: the heading itself - the thing the reader
+       clicks to reopen, and a live scroll target - always keeps its box. */
+    html[data-format="markdown"] #content .ekb-fold.ekb-folded > :not(.ekb-fold-head) { display: none; }
+    /* The wrapper takes the heading's place as the chapter's first child, so the
+       margin reset above has to reach through it. */
+    html[data-format="markdown"] #content .chapter > .ekb-fold:first-child > .ekb-fold-head { margin-top: 0; }
+
     /* Links, quotes, rules, lists, task lists. */
     html[data-format="markdown"] #content a { color: var(--gh-accent); text-decoration: underline; }
     html[data-format="markdown"] #content blockquote {
@@ -373,11 +424,22 @@ enum ReaderAssets {
     html[data-format="markdown"] #content img { max-width: 100%; }
     html[data-format="markdown"] #content del { text-decoration: line-through; }
 
-    /* Copy button on code blocks: a markdown-scoped enhancer adds one <button>
-       per eligible <pre>, so only the block that contains it is made a
-       positioning context. The button hides until the block is hovered or the
-       button is focused/keyboard-copied, and the extra top padding keeps the
-       first code line clear of it. */
+    /* Code-block tools: a markdown-scoped enhancer wraps every eligible <pre> in
+       a .ekb-pre-wrap and hangs one .ekb-tools bar (line-number toggle, fold
+       toggle on long blocks, copy button) plus a resize grip off the wrapper.
+       The wrapper exists because the pre is the scrolling container
+       (overflow: auto): an absolutely positioned child inside it scrolls away
+       with the code, while the bar and the grip must stay pinned to the block's
+       visible corners. The wrapper takes the block's outer spacing and the
+       pre's margin is zeroed, so the vertical rhythm is pixel-identical to an
+       unwrapped block. The bar hides until the block is hovered, the bar is
+       focused, a copy just flashed its confirmation, or the block is folded -
+       a folded block's bar stays put because it holds the only way back out.
+       The extra top padding keeps the first code line clear of the bar. */
+    html[data-format="markdown"] #content .ekb-pre-wrap {
+        position: relative; margin: 0 0 16px;
+    }
+    html[data-format="markdown"] #content .ekb-pre-wrap > pre { margin: 0; }
     html[data-format="markdown"] #content pre.ekb-has-copy {
         position: relative; padding-top: 34px;
     }
@@ -396,6 +458,78 @@ enum ReaderAssets {
     }
     html[data-format="markdown"] #content .ekb-copy[data-copied] {
         color: var(--gh-accent); border-color: var(--gh-accent);
+    }
+    /* Inside the bar the buttons are flex items and the reveal is the bar's own,
+       so the base rule's absolute position and opacity come undone for them. The
+       block-math Copy button below never sits in a bar and keeps the base rule. */
+    html[data-format="markdown"] #content .ekb-tools {
+        position: absolute; top: 6px; right: 6px; display: flex; gap: 4px;
+        opacity: 0; transition: opacity .12s ease;
+        -webkit-user-select: none; user-select: none;
+    }
+    html[data-format="markdown"] #content .ekb-pre-wrap:hover .ekb-tools,
+    html[data-format="markdown"] #content .ekb-tools:focus-within,
+    html[data-format="markdown"] #content .ekb-pre-wrap:has([data-copied]) .ekb-tools,
+    html[data-format="markdown"] #content .ekb-pre-wrap:has(pre.ekb-folded) .ekb-tools { opacity: 1; }
+    html[data-format="markdown"] #content .ekb-tools .ekb-copy {
+        position: static; opacity: 1;
+    }
+    /* The resize grip, bottom right. Like the bar it cannot live inside the pre:
+       the pre is the scroll container, so a child there would scroll away with
+       the code the moment the block is resized down. Three bands of 135deg
+       gradients draw the diagonal strokes - each band runs at 45deg
+       (bottom-left to top-right) and the 16px box clips the later bands shorter
+       as they near the corner - so no image or font is needed. Hidden until the
+       block is hovered, the grip is focused, or the block holds a resized
+       height (wrapper class ekb-resized). */
+    html[data-format="markdown"] #content .ekb-resize {
+        position: absolute; right: 2px; bottom: 2px; width: 16px; height: 16px;
+        border: 0; border-radius: 3px; cursor: nwse-resize; touch-action: none;
+        opacity: 0; transition: opacity .12s ease;
+        --ekb-grip: var(--gh-muted);
+        background:
+            linear-gradient(135deg, transparent 0 9px, var(--ekb-grip) 9px 10.5px, transparent 10.5px),
+            linear-gradient(135deg, transparent 0 13px, var(--ekb-grip) 13px 14.5px, transparent 14.5px),
+            linear-gradient(135deg, transparent 0 17px, var(--ekb-grip) 17px 18.5px, transparent 18.5px);
+    }
+    html[data-format="markdown"] #content .ekb-pre-wrap:hover .ekb-resize,
+    html[data-format="markdown"] #content .ekb-resize:focus-visible,
+    html[data-format="markdown"] #content .ekb-pre-wrap.ekb-resized .ekb-resize { opacity: 1; }
+    html[data-format="markdown"] #content .ekb-resize:hover,
+    html[data-format="markdown"] #content .ekb-resize:focus-visible {
+        --ekb-grip: var(--gh-accent); outline: none;
+    }
+    /* The other two bar buttons borrow the chip look rather than the .ekb-copy
+       class: they never copy, so the [data-copied] state is not theirs. The
+       pressed line-number toggle takes the accent colour, the same tell the
+       Copied flash uses. */
+    html[data-format="markdown"] #content .ekb-lines-btn,
+    html[data-format="markdown"] #content .ekb-fold-btn {
+        padding: 2px 8px; border: 1px solid var(--gh-border); border-radius: 6px;
+        background: var(--gh-subtle); color: var(--gh-text);
+        font-family: var(--gh-sans); font-size: 12px; line-height: 1.4;
+        cursor: pointer;
+    }
+    html[data-format="markdown"] #content .ekb-lines-btn:hover,
+    html[data-format="markdown"] #content .ekb-fold-btn:hover {
+        background: var(--gh-canvas); border-color: var(--gh-muted);
+    }
+    html[data-format="markdown"] #content .ekb-lines-btn[aria-pressed="true"] {
+        color: var(--gh-accent); border-color: var(--gh-accent);
+    }
+    /* A folded block clamps to twelve lines (the pre's line-height is 1.45, so
+       the em-based clamp follows the reader's text size) and fades out over the
+       last two in the block's own background colour, so the fade is invisible
+       against it. The fade ignores clicks, and the code under it stays
+       selectable. */
+    html[data-format="markdown"] #content pre.ekb-folded {
+        max-height: calc(12 * 1.45em); overflow: hidden;
+    }
+    html[data-format="markdown"] #content pre.ekb-folded::after {
+        content: ''; position: absolute; left: 0; right: 0; bottom: 0;
+        height: 2.9em; border-radius: 0 0 6px 6px;
+        background: linear-gradient(to bottom, transparent, var(--gh-subtle));
+        pointer-events: none;
     }
     /* The same button on block math. Only the positioning context and the hover
        reveal are math-specific; the look above is the shared .ekb-copy rule. Inline
@@ -447,6 +581,68 @@ enum ReaderAssets {
         cursor: pointer; font-weight: 600; margin-bottom: 0;
     }
     html[data-format="markdown"] #content details[open] > summary { margin-bottom: 8px; }
+
+    /* A markdown page has one section, so `content-visibility: auto` (the
+       cross-format perf switch) can skip nothing here - but it also applies
+       paint containment, which clipped the fold toggle out in the gutter and
+       made it unclickable (measured: elementFromPoint returned #content). */
+    html[data-format="markdown"] #content .chapter { content-visibility: visible; }
+
+    /* The lightbox: a click on a picture opens it over the reader, zoomable and
+       pannable. It is not format-scoped - EPUB, MOBI, AZW/AZW3, FB2 and CHM pages
+       carry the same <img> elements Markdown does, so every text format gets it.
+       The two page-image formats are excluded: there the picture is the page
+       itself, A-/A+ already scales it, and a click belongs to the page (the
+       script skips them, and so does the zoom-in cursor below).
+       The overlay is appended to <body> and fixed to the viewport, so #content's
+       padding, its sidebar margin and the text zoom (which only ever resizes
+       #content's font) cannot reach it; and it is deliberately one dark look in
+       both themes - preview chrome, not book text. z-index 1000 puts it above the
+       sidebar (1), the status strip (4), the resume pill (5) and the scroll
+       indicator (6). The cursor is the only affordance the picture itself needs. */
+    html:not([data-format="djvu"]):not([data-format="cbz"]) #content img { cursor: zoom-in; }
+    .ekb-lb-open { overflow: hidden; }
+    #ekb-lightbox {
+        position: fixed; inset: 0; z-index: 1000;
+        display: flex; flex-direction: column;
+        background: rgba(0, 0, 0, .86); color: #fff;
+        -webkit-user-select: none; user-select: none;
+    }
+    /* The control strip, top right. Px sizing, like the rest of the chrome, so
+       the reader's text zoom can never grow the buttons. */
+    #ekb-lightbox .ekb-lb-bar {
+        flex: 0 0 auto; display: flex; align-items: center; justify-content: flex-end;
+        gap: 8px; padding: 10px 12px;
+    }
+    #ekb-lightbox .ekb-lb-bar button {
+        font: inherit; font-size: 14px; line-height: 1.5; min-width: 30px;
+        padding: 2px 9px; color: #fff; cursor: pointer;
+        background: rgba(255, 255, 255, .13); border: 1px solid rgba(255, 255, 255, .28);
+        border-radius: 6px;
+    }
+    #ekb-lightbox .ekb-lb-bar button:hover {
+        background: rgba(255, 255, 255, .26);
+    }
+    #ekb-lightbox .ekb-lb-level {
+        min-width: 4.5ch; text-align: center; font-size: 13px;
+        font-variant-numeric: tabular-nums; opacity: .85;
+    }
+    /* The stage takes the wheel (zoom) and the backdrop click (close); the box
+       is centred with left/top 50% plus a translate, and every zoom or pan only
+       rewrites the box's transform, so no layout ever runs mid-gesture. */
+    #ekb-lightbox .ekb-lb-stage {
+        flex: 1 1 auto; min-height: 0; position: relative; overflow: hidden;
+        touch-action: none;
+    }
+    #ekb-lightbox .ekb-lb-content {
+        position: absolute; left: 50%; top: 50%; cursor: grab;
+    }
+    #ekb-lightbox.ekb-lb-drag .ekb-lb-content { cursor: grabbing; }
+    /* Sized by the transform alone: the global img/svg clamp above would cap the
+       picture at the viewport, and the native drag would fight the pan. */
+    #ekb-lightbox img {
+        display: block; max-width: none; max-height: none; -webkit-user-drag: none;
+    }
 
     /* FictionBook: the elements FB2 has and HTML does not. Scoped to the format attribute a
        FB2 page carries, so an EPUB/MOBI page (no attribute) matches none of it. */
@@ -836,15 +1032,33 @@ enum ReaderAssets {
             return content.querySelectorAll('section.chapter h1[id], section.chapter h2[id], section.chapter h3[id]');
         }
 
+        /* Is `el` hidden inside a folded markdown section? The heading of a folded
+           section is NOT: the fold keeps it (it is the click target that reopens
+           the section, and a live scroll target), and only the rest of the box is
+           display:none. So a fold only hides an element when the element is not
+           that box's own head - which also catches a nested heading whose nearest
+           folded ancestor is an outer section. Tested for the fold itself rather
+           than for a zero-size box: offscreen `content-visibility` chapters must
+           keep their headings measured. */
+        function foldedAway(el) {
+            for (var box = el.parentElement; box && box !== content; box = box.parentElement) {
+                if (!box.classList || !box.classList.contains('ekb-folded')) { continue; }
+                if (el !== box.firstElementChild) { return true; }
+            }
+            return false;
+        }
+
         /* One pass over the headings; reading a rect forces layout, so it is cached
            and dropped whenever the layout can have changed. */
         function measure() {
             if (layout !== null) { return layout; }
-            var list = headings();
+            var all = headings();
             var scroll = scroller.scrollTop;
-            var offsets = new Array(list.length);
-            for (var i = 0; i < list.length; i++) {
-                offsets[i] = list[i].getBoundingClientRect().top + scroll;
+            var list = [], offsets = [];
+            for (var i = 0; i < all.length; i++) {
+                if (foldedAway(all[i])) { continue; }
+                list.push(all[i]);
+                offsets.push(all[i].getBoundingClientRect().top + scroll);
             }
             layout = {
                 list: list,
@@ -1009,6 +1223,10 @@ enum ReaderAssets {
             toc.querySelectorAll('a[href^="#"]').forEach(function (link) {
                 var target = targetOf(link);
                 if (!target) { return; }
+                /* A target hidden inside a folded markdown section cannot be
+                   highlighted; a folded section's own heading can (it stays
+                   visible), see foldedAway. */
+                if (foldedAway(target)) { return; }
                 var at = target.getBoundingClientRect().top + scroll;
                 if (at <= line && at > best) { best = at; match = link; }
             });
@@ -1295,27 +1513,46 @@ enum ReaderAssets {
             }
         }
 
-        /* ---------- copy buttons (markdown only) ---------- */
+        /* ---------- code-block tools (markdown only) ---------- */
 
-        /* GitHub-style copy button on fenced code blocks. The html[data-format]
-           gate keeps this off an EPUB/MOBI page: only a markdown page carries
-           the attribute, and there none of these selectors can run.
-           Deliberately independent of jsParse, because a raw-source page
-           (pre.markdown-source) is exactly where copying matters most. */
-        if (document.documentElement.getAttribute('data-format') === 'markdown') {
-            /* Off unless the reader turned it on. The numbers themselves are ::before
-               pseudo content (see the stylesheet), never text nodes; the copy payload
-               is captured before the wrapping below, so it stays the original source. */
+        /* Which format this page is: markdown and the two page-image formats
+           carry `data-format` (fb2 carries `fb2`), while EPUB/MOBI/AZW/AZW3/CHM
+           carry nothing. The lightbox is the one feature that is not
+           markdown-only: every text format has ordinary <img> elements, while in
+           a page-image book the picture IS the page. */
+        var format = document.documentElement.getAttribute('data-format');
+        var markdown = format === 'markdown';
+        var pageImage = format === 'djvu' || format === 'cbz';
+
+        /* GitHub-style tools on fenced code blocks: a line-number toggle, a fold
+           toggle on long blocks, and the copy button, in one .ekb-tools bar per
+           block. The markdown gate keeps this off an EPUB/MOBI page, which has
+           no rendered markdown. Deliberately independent of jsParse, because a
+           raw-source page (pre.markdown-source) is exactly where copying matters
+           most. */
+        if (markdown) {
+            /* Off unless the reader turned it on, and only the initial state: each
+               block's own toggle overrides it for that one block. The numbers
+               themselves are ::before pseudo content (see the stylesheet), never
+               text nodes; the copy payload is captured before any wrapping, so it
+               stays the original source. */
             var wantsLineNumbers = state.lineNumbers === true;
+
+            /* A block this short already fits the fold clamp, so folding it would
+               hide nothing and the toggle is not offered. The stylesheet clamps to
+               the same count (12 * 1.45em of a 1.45 line-height). */
+            var codeFoldLines = 12;
 
             /* One block span per line; each span holds only its own line text and no
                '\\n', because their block layout supplies the breaks and the stylesheet
                keeps the counter in a left gutter outside the selectable text run. A
                trailing newline's empty piece is skipped so no spurious blank numbered
                row appears; an interior blank line stays as an :empty span, which the
-               stylesheet keeps one line tall and unnumbered. */
-            function applyLineNumbers(target) {
-                var pieces = target.textContent.split('\\n');
+               stylesheet keeps one line tall and unnumbered. The split always starts
+               from the captured source, never from textContent (which the wrapping
+               itself rewrites), so off -> on -> off round-trips byte-for-byte. */
+            function applyLineNumbers(code) {
+                var pieces = code.parentNode.__ekbSource.split('\\n');
                 if (pieces.length > 1 && pieces[pieces.length - 1] === '') { pieces.pop(); }
                 var fragment = document.createDocumentFragment();
                 for (var i = 0; i < pieces.length; i++) {
@@ -1324,8 +1561,34 @@ enum ReaderAssets {
                     line.textContent = pieces[i];
                     fragment.appendChild(line);
                 }
-                while (target.firstChild) { target.removeChild(target.firstChild); }
-                target.appendChild(fragment);
+                while (code.firstChild) { code.removeChild(code.firstChild); }
+                code.appendChild(fragment);
+            }
+
+            function removeLineNumbers(code) {
+                code.textContent = code.parentNode.__ekbSource;
+                code.parentNode.classList.remove('ekb-lines');
+            }
+
+            /* The button mirrors the class, not a cached flag: the class is the
+               state, so the two can never desync. */
+            function reflectLinesButton(button, pre) {
+                var on = pre.classList.contains('ekb-lines');
+                button.setAttribute('aria-pressed', on ? 'true' : 'false');
+                button.title = on ? 'Hide line numbers' : 'Show line numbers';
+            }
+
+            /* One place folds or unfolds a code block and syncs the toggle's
+               glyph, aria-expanded and title: the fold click, and also the
+               resize grip, which has to unfold a clamped block before it can
+               size real content. */
+            function setCodeFolded(pre, button, folded) {
+                pre.classList.toggle('ekb-folded', folded);
+                if (button) {
+                    button.setAttribute('aria-expanded', folded ? 'false' : 'true');
+                    button.textContent = folded ? '▸' : '▾';
+                    button.title = folded ? 'Unfold code block' : 'Fold code block';
+                }
             }
 
             function enhanceCodeBlocks() {
@@ -1333,55 +1596,604 @@ enum ReaderAssets {
                 for (var i = 0; i < blocks.length; i++) {
                     var pre = blocks[i];
                     if (pre.classList.contains('mermaid')) { continue; }
-                    if (pre.closest && pre.closest('.math-block')) { continue; }
+                    if (pre.closest && (pre.closest('.mermaid') || pre.closest('.math-block'))) { continue; }
                     if (pre.classList.contains('ekb-has-copy')) { continue; }
                     var code = pre.querySelector('code');
-                    if (!code && !pre.classList.contains('markdown-source')) { continue; }
+                    if (!code && pre.classList.contains('markdown-source')) {
+                        /* A raw-source block arrives as bare escaped text; give it
+                           the <code> child a rendered block has, so everything
+                           below treats both alike. The pre code rules keep it
+                           visually identical (transparent background, no padding,
+                           white-space: pre, 100% font size). */
+                        code = document.createElement('code');
+                        while (pre.firstChild) { code.appendChild(pre.firstChild); }
+                        pre.appendChild(code);
+                    }
+                    if (!code) { continue; }
 
-                    /* Captured before the button is appended, so the button's own
-                       label is never part of a raw-source block's textContent. */
-                    var text = code ? code.textContent : pre.textContent;
+                    /* Captured exactly once, before any wrapping and before the bar
+                       exists: the copy payload and the line-number split both read
+                       this expando, so a button label can never leak into the
+                       payload and no toggle loses a byte. */
+                    pre.__ekbSource = code.textContent;
 
-                    /* Line numbers wrap the line's text in block spans; the captured
-                       payload above is already the original source, so copy is
-                       unaffected by the wrapping either way. */
-                    if (wantsLineNumbers && !pre.classList.contains('ekb-lines')) {
-                        applyLineNumbers(code || pre);
+                    var lineCount = pre.__ekbSource.split('\\n').length;
+                    if (lineCount > 1 && pre.__ekbSource.charAt(pre.__ekbSource.length - 1) === '\\n') {
+                        lineCount -= 1;
+                    }
+
+                    if (wantsLineNumbers) {
+                        applyLineNumbers(code);
                         pre.classList.add('ekb-lines');
                     }
 
                     pre.classList.add('ekb-has-copy');
-                    var button = document.createElement('button');
-                    button.type = 'button';
-                    button.className = 'ekb-copy';
-                    button.textContent = 'Copy';
 
-                    (function (owner, control, payload) {
-                        control.addEventListener('click', function () {
-                            copyText(payload);
-                            control.textContent = 'Copied';
-                            control.setAttribute('data-copied', '');
+                    /* The pre is the block's scroll container (overflow: auto
+                       in the stylesheet), so chrome living inside it scrolls
+                       away with the code. The bar and the resize grip hang off
+                       this wrapper instead, which does not scroll; the
+                       stylesheet moves the block's bottom margin onto it and
+                       zeroes the pre's, so the vertical rhythm is unchanged. */
+                    var wrap = document.createElement('div');
+                    wrap.className = 'ekb-pre-wrap';
+                    pre.parentNode.insertBefore(wrap, pre);
+                    wrap.appendChild(pre);
+
+                    var tools = document.createElement('div');
+                    tools.className = 'ekb-tools';
+
+                    var linesButton = document.createElement('button');
+                    linesButton.type = 'button';
+                    linesButton.className = 'ekb-lines-btn';
+                    linesButton.textContent = '≡';
+                    reflectLinesButton(linesButton, pre);
+                    tools.appendChild(linesButton);
+
+                    var foldButton = null;
+                    if (lineCount > codeFoldLines) {
+                        foldButton = document.createElement('button');
+                        foldButton.type = 'button';
+                        foldButton.className = 'ekb-fold-btn';
+                        foldButton.textContent = '▾';
+                        foldButton.setAttribute('aria-expanded', 'true');
+                        foldButton.title = 'Fold code block';
+                        tools.appendChild(foldButton);
+                    }
+
+                    var copyButton = document.createElement('button');
+                    copyButton.type = 'button';
+                    copyButton.className = 'ekb-copy';
+                    copyButton.textContent = 'Copy';
+                    tools.appendChild(copyButton);
+
+                    /* A block of three lines or fewer is already at the floor
+                       the drag enforces, so resizing it could only hide lines
+                       and no grip is offered. */
+                    var grip = null;
+                    if (lineCount > 3) {
+                        grip = document.createElement('div');
+                        grip.className = 'ekb-resize';
+                        grip.setAttribute('tabindex', '0');
+                        grip.setAttribute('role', 'separator');
+                        grip.setAttribute('aria-orientation', 'horizontal');
+                        grip.setAttribute('aria-label', 'Resize code block');
+                        grip.title = 'Drag to resize, double-click to reset';
+                    }
+
+                    (function (owner, holder, blockCode, linesControl, foldControl, copyControl, gripControl) {
+                        linesControl.addEventListener('click', function () {
+                            if (owner.classList.contains('ekb-lines')) {
+                                removeLineNumbers(blockCode);
+                            } else {
+                                applyLineNumbers(blockCode);
+                                owner.classList.add('ekb-lines');
+                            }
+                            reflectLinesButton(linesControl, owner);
+                            /* The block's height just changed, and with it the
+                               offsets the position math cached. */
+                            dropLayout(); refreshScrollbar();
+                        });
+                        if (foldControl) {
+                            foldControl.addEventListener('click', function () {
+                                setCodeFolded(owner, foldControl, !owner.classList.contains('ekb-folded'));
+                                dropLayout(); refreshScrollbar();
+                            });
+                        }
+                        copyControl.addEventListener('click', function () {
+                            copyText(owner.__ekbSource);
+                            copyControl.textContent = 'Copied';
+                            copyControl.setAttribute('data-copied', '');
                             setTimeout(function () {
-                                control.textContent = 'Copy';
-                                control.removeAttribute('data-copied');
+                                copyControl.textContent = 'Copy';
+                                copyControl.removeAttribute('data-copied');
                             }, 1200);
                         });
-                    })(pre, button, text);
+                        if (gripControl) {
+                            /* Min height: three line boxes (the pre is
+                               content-box, so style.height is the content
+                               height, and getComputedStyle reports it in px).
+                               The ceiling is the block's natural content
+                               height, measured at drag start: a block can
+                               shrink until it scrolls, but it never stretches
+                               past its own content. */
+                            var dragging = false, startY = 0, startHeight = 0, maxHeight = 0;
+                            var metrics = function () {
+                                var cs = getComputedStyle(owner);
+                                var line = parseFloat(cs.lineHeight);
+                                if (!line || isNaN(line)) { line = 20; }
+                                var pad = (parseFloat(cs.paddingTop) || 0)
+                                    + (parseFloat(cs.paddingBottom) || 0);
+                                return { line: line, pad: pad, height: parseFloat(cs.height) };
+                            };
+                            var applyHeight = function (h) {
+                                owner.style.height = Math.round(h) + 'px';
+                                holder.classList.add('ekb-resized');
+                            };
+                            var resetHeight = function () {
+                                owner.style.height = '';
+                                holder.classList.remove('ekb-resized');
+                                dropLayout(); refreshScrollbar();
+                            };
+                            gripControl.addEventListener('pointerdown', function (event) {
+                                if (event.button !== 0) { return; }
+                                /* Stops the drag from selecting text or
+                                   scrolling the page. */
+                                event.preventDefault();
+                                /* A folded block is clamped to twelve lines by
+                                   the stylesheet; unfold it first so the drag
+                                   sizes real content. */
+                                if (owner.classList.contains('ekb-folded')) {
+                                    setCodeFolded(owner, foldControl, false);
+                                }
+                                var m = metrics();
+                                dragging = true;
+                                startY = event.clientY;
+                                startHeight = m.height;
+                                maxHeight = owner.scrollHeight - m.pad;
+                                gripControl.setPointerCapture(event.pointerId);
+                            });
+                            gripControl.addEventListener('pointermove', function (event) {
+                                if (!dragging) { return; }
+                                event.preventDefault();
+                                var h = startHeight + (event.clientY - startY);
+                                h = Math.max(metrics().line * 3, Math.min(maxHeight, h));
+                                applyHeight(h);
+                                /* Cheap only; the scrollbar redraw waits for
+                                   the release. */
+                                dropLayout();
+                            });
+                            var endDrag = function (event) {
+                                if (!dragging) { return; }
+                                dragging = false;
+                                if (gripControl.hasPointerCapture && gripControl.hasPointerCapture(event.pointerId)) {
+                                    gripControl.releasePointerCapture(event.pointerId);
+                                }
+                                dropLayout(); refreshScrollbar();
+                            };
+                            gripControl.addEventListener('pointerup', endDrag);
+                            gripControl.addEventListener('pointercancel', endDrag);
+                            gripControl.addEventListener('dblclick', function (event) {
+                                event.preventDefault();
+                                resetHeight();
+                            });
+                            gripControl.addEventListener('keydown', function (event) {
+                                if (event.key === 'Home') {
+                                    event.preventDefault();
+                                    resetHeight();
+                                    return;
+                                }
+                                if (event.key !== 'ArrowUp' && event.key !== 'ArrowDown') { return; }
+                                event.preventDefault();
+                                if (owner.classList.contains('ekb-folded')) {
+                                    setCodeFolded(owner, foldControl, false);
+                                }
+                                var m = metrics();
+                                var h = m.height + (event.key === 'ArrowDown' ? 24 : -24);
+                                h = Math.max(m.line * 3, Math.min(owner.scrollHeight - m.pad, h));
+                                applyHeight(h);
+                                dropLayout(); refreshScrollbar();
+                            });
+                        }
+                    })(pre, wrap, code, linesButton, foldButton, copyButton, grip);
 
-                    pre.appendChild(button);
+                    wrap.appendChild(tools);
+                    if (grip) { wrap.appendChild(grip); }
                 }
             }
 
-            if (document.readyState === 'loading') {
-                document.addEventListener('DOMContentLoaded', enhanceCodeBlocks);
-            } else {
-                enhanceCodeBlocks();
+            /* ---------- collapsible heading sections ---------- */
+
+            /* A heading that is a direct child of the chapter opens a logical
+               section that runs to the next heading of the same or a higher level.
+               Each gets a nesting wrapper, so folding one heading hides its whole
+               subtree - fold an h1 and the h2/h3 sections under it go with it. A
+               heading nested deeper (inside a blockquote, say) is prose, not a
+               section, and is left alone, as is everything before the first
+               heading; a chapter with no headings keeps its exact shape. */
+            function enhanceFolds() {
+                var sections = content.querySelectorAll('section.chapter');
+                for (var s = 0; s < sections.length; s++) {
+                    var section = sections[s];
+                    /* section.children is live; snapshot it before the tree moves. */
+                    var children = Array.prototype.slice.call(section.children);
+                    var open = [];
+                    for (var i = 0; i < children.length; i++) {
+                        var node = children[i];
+                        var matched = /^H([1-6])$/.exec(node.tagName);
+                        if (!matched) {
+                            if (open.length) { open[open.length - 1].box.appendChild(node); }
+                            continue;
+                        }
+                        var level = matched[1].charCodeAt(0) - 48;
+                        while (open.length && open[open.length - 1].level >= level) { open.pop(); }
+                        var box = document.createElement('div');
+                        box.className = 'ekb-fold';
+                        (open.length ? open[open.length - 1].box : section).appendChild(box);
+                        node.classList.add('ekb-fold-head');
+                        box.appendChild(node);
+                        addFoldToggle(node);
+                        open.push({ level: level, box: box });
+                    }
+                }
             }
 
-            /* Covers math whose katex was already present when this script ran (the
-               injection gate above skipped, so its onload never fires). */
-            enhanceMath();
+            /* The chevron sits in the heading's left gutter, absolutely positioned,
+               so the heading's text never moves when it appears. Its state mirrors
+               the wrapper's: aria-expanded, the ▾/▸ glyph and the title. */
+            function addFoldToggle(heading) {
+                var button = document.createElement('button');
+                button.type = 'button';
+                button.className = 'ekb-fold-toggle';
+                button.setAttribute('aria-expanded', 'true');
+                button.title = 'Fold section';
+                button.textContent = '▾';
+                button.addEventListener('click', function () {
+                    var box = heading.parentElement;
+                    setFolded(box, !box.classList.contains('ekb-folded'));
+                    /* Folded or not, heading offsets and the scroll height just
+                       changed, and with them the position math and the highlight. */
+                    dropLayout(); refreshScrollbar(); updateCurrent();
+                });
+                heading.insertBefore(button, heading.firstChild);
+            }
+
+            function foldToggleOf(box) {
+                var head = box.firstElementChild;
+                if (!head || !head.classList.contains('ekb-fold-head')) { return null; }
+                var toggle = head.firstElementChild;
+                return toggle && toggle.classList.contains('ekb-fold-toggle') ? toggle : null;
+            }
+
+            function setFolded(box, folded) {
+                box.classList.toggle('ekb-folded', folded);
+                var toggle = foldToggleOf(box);
+                if (toggle) {
+                    toggle.setAttribute('aria-expanded', folded ? 'false' : 'true');
+                    toggle.textContent = folded ? '▸' : '▾';
+                    toggle.title = folded ? 'Unfold section' : 'Fold section';
+                }
+            }
+
+            /* A contents entry or an in-body #anchor link can point into a folded
+               section; the browser would scroll to where the hidden anchor used to
+               be and land nowhere. Capture phase, so every ancestor wrapper is open
+               again before the jump is computed. A bare '#' (the resume pill's
+               'top') has no target and is skipped. */
+            document.addEventListener('click', function (event) {
+                var node = event.target;
+                while (node && node.tagName !== 'A') { node = node.parentNode; }
+                if (!node) { return; }
+                var href = node.getAttribute('href') || '';
+                if (href.charAt(0) !== '#' || href.length < 2) { return; }
+                var target = document.getElementById(href.slice(1));
+                if (!target) { return; }
+                var reopened = false;
+                for (var box = target.parentElement; box && box !== content; box = box.parentElement) {
+                    if (box.classList && box.classList.contains('ekb-folded')) {
+                        setFolded(box, false);
+                        reopened = true;
+                    }
+                }
+                if (reopened) { dropLayout(); refreshScrollbar(); updateCurrent(); }
+            }, true);
+
+            if (document.readyState === 'loading') {
+                document.addEventListener('DOMContentLoaded', function () {
+                    enhanceCodeBlocks();
+                    enhanceFolds();
+                });
+            } else {
+                enhanceCodeBlocks();
+                enhanceFolds();
+            }
         }
+
+        /* ---------- image + diagram lightbox (every text format) ---------- */
+
+        /* Pages whose picture IS the page (DjVu, CBZ) are the one exclusion: the
+           reader scales those with A-/A+, and a click on a page belongs to the
+           page. Every other format has ordinary <img> elements - EPUB, MOBI,
+           AZW/AZW3, FB2, CHM and Markdown - and they all get the same overlay. */
+        if (!pageImage) {
+
+            /* A click on a picture or a rendered mermaid diagram opens it over
+               the page, zoomable and pannable. Delegating the click on #content
+               is what makes the async mermaid render free: the diagram's <svg>
+               appears whenever window.mermaid.run resolves, and no hook into
+               that promise is needed. The overlay itself is appended to <body>,
+               never to #content, so the column's padding, the sidebar margin and
+               the text zoom cannot move it. */
+            var LB_MIN = 0.25, LB_MAX = 8;
+            var lb = {
+                root: null, stage: null, box: null, level: null, closeButton: null,
+                open: false, dragging: false,
+                scale: 1, tx: 0, ty: 0, natW: 0, natH: 0,
+                opener: null, hadTabindex: null
+            };
+
+            /* One transform carries everything: translate(-50%,-50%) centres the
+               box (its layout size is the picture's natural size), translate(tx,ty)
+               is the pan in screen pixels, and scale() zooms about the box's own
+               centre. A point of the picture therefore sits at
+               stageCentre + t + scale * localOffset, which is exactly what the
+               wheel math uses below to keep the point under the cursor. Only the
+               transform and the label are ever written - no layout while zooming. */
+            function lbApply() {
+                lb.box.style.transform = 'translate(-50%, -50%) translate('
+                    + lb.tx + 'px, ' + lb.ty + 'px) scale(' + lb.scale + ')';
+                lb.level.textContent = Math.round(lb.scale * 100) + '%';
+            }
+
+            /* min(1, stageW/w, stageH/h): never upscale on open, and a picture
+               smaller than the stage opens at its natural size. */
+            function lbFitScale() {
+                var w = lb.stage.clientWidth, h = lb.stage.clientHeight;
+                if (w < 1 || h < 1 || lb.natW < 1 || lb.natH < 1) { return 1; }
+                return Math.min(1, w / lb.natW, h / lb.natH);
+            }
+
+            function lbShowFit() {
+                lb.scale = Math.min(LB_MAX, Math.max(LB_MIN, lbFitScale()));
+                lb.tx = 0; lb.ty = 0;
+                lbApply();
+            }
+
+            /* Button zoom keeps the centre: only the scale changes. */
+            function lbStepZoom(factor) {
+                var next = Math.min(LB_MAX, Math.max(LB_MIN, lb.scale * factor));
+                if (next === lb.scale) { return; }
+                lb.scale = next;
+                lbApply();
+            }
+
+            function lbBuild() {
+                var root = document.createElement('div');
+                root.id = 'ekb-lightbox';
+                root.setAttribute('role', 'dialog');
+                root.setAttribute('aria-modal', 'true');
+                root.setAttribute('aria-label', 'Image preview');
+                root.style.display = 'none';
+
+                var bar = document.createElement('div');
+                bar.className = 'ekb-lb-bar';
+
+                function lbButton(action, label, title) {
+                    var button = document.createElement('button');
+                    button.type = 'button';
+                    button.setAttribute('data-ekb-act', action);
+                    button.title = title;
+                    button.textContent = label;
+                    return button;
+                }
+
+                var level = document.createElement('span');
+                level.className = 'ekb-lb-level';
+                level.textContent = '100%';
+
+                bar.appendChild(lbButton('out', '−', 'Zoom out'));
+                bar.appendChild(level);
+                bar.appendChild(lbButton('in', '+', 'Zoom in'));
+                bar.appendChild(lbButton('fit', 'Fit', 'Fit to window'));
+                var closeButton = lbButton('close', '×', 'Close');
+                bar.appendChild(closeButton);
+
+                var stage = document.createElement('div');
+                stage.className = 'ekb-lb-stage';
+                var box = document.createElement('div');
+                box.className = 'ekb-lb-content';
+                stage.appendChild(box);
+                root.appendChild(bar);
+                root.appendChild(stage);
+                document.body.appendChild(root);
+
+                lb.root = root; lb.stage = stage; lb.box = box;
+                lb.level = level; lb.closeButton = closeButton;
+
+                bar.addEventListener('click', function (event) {
+                    var button = event.target.closest
+                        ? event.target.closest('[data-ekb-act]') : null;
+                    if (!button) { return; }
+                    var action = button.getAttribute('data-ekb-act');
+                    if (action === 'in') { lbStepZoom(1.25); }
+                    else if (action === 'out') { lbStepZoom(1 / 1.25); }
+                    else if (action === 'fit') { lbShowFit(); }
+                    else if (action === 'close') { lbClose(); }
+                });
+
+                /* Backdrop only: a click landing on the picture - or ending a
+                   pan, whose pointer capture retargets it - must not close. */
+                stage.addEventListener('click', function (event) {
+                    if (event.target === stage) { lbClose(); }
+                });
+
+                /* Wheel zoom, anchored at the cursor: with a picture point at
+                   stageCentre + t + scale*v, t' = f*t + (1-f)*(pointer - centre)
+                   keeps that point under the pointer across the zoom. The wheel
+                   is cancelled so the page cannot scroll behind the overlay, and
+                   the factor is clamped so one trackpad flick cannot jump the
+                   whole range in a single event. */
+                stage.addEventListener('wheel', function (event) {
+                    event.preventDefault();
+                    var factor = Math.exp(-event.deltaY * 0.0015);
+                    factor = Math.min(2, Math.max(0.5, factor));
+                    var next = Math.min(LB_MAX, Math.max(LB_MIN, lb.scale * factor));
+                    if (next === lb.scale) { return; }
+                    var rect = stage.getBoundingClientRect();
+                    var px = event.clientX - (rect.left + rect.width / 2);
+                    var py = event.clientY - (rect.top + rect.height / 2);
+                    var f = next / lb.scale;
+                    lb.tx = f * lb.tx + (1 - f) * px;
+                    lb.ty = f * lb.ty + (1 - f) * py;
+                    lb.scale = next;
+                    lbApply();
+                }, { passive: false });
+
+                /* Pan by dragging the picture; capture keeps the gesture alive
+                   when the pointer runs off the box mid-drag. */
+                var panX = 0, panY = 0;
+                box.addEventListener('pointerdown', function (event) {
+                    event.preventDefault();
+                    lb.dragging = true;
+                    panX = event.clientX; panY = event.clientY;
+                    try { box.setPointerCapture(event.pointerId); } catch (error) {}
+                    root.classList.add('ekb-lb-drag');
+                });
+                box.addEventListener('pointermove', function (event) {
+                    if (!lb.dragging) { return; }
+                    lb.tx += event.clientX - panX;
+                    lb.ty += event.clientY - panY;
+                    panX = event.clientX; panY = event.clientY;
+                    lbApply();
+                });
+                function lbPanEnd() {
+                    lb.dragging = false;
+                    root.classList.remove('ekb-lb-drag');
+                }
+                box.addEventListener('pointerup', lbPanEnd);
+                box.addEventListener('pointercancel', lbPanEnd);
+            }
+
+            function lbOnKeydown(event) {
+                if (event.key !== 'Escape') { return; }
+                /* The panel's own Escape (close the window) must not fire too. */
+                event.preventDefault();
+                event.stopPropagation();
+                lbClose();
+            }
+
+            function lbOpen(node, width, height, opener) {
+                if (!lb.root) { lbBuild(); }
+                while (lb.box.firstChild) { lb.box.removeChild(lb.box.firstChild); }
+                lb.box.appendChild(node);
+                lb.natW = width; lb.natH = height;
+                lb.dragging = false;
+                lb.opener = opener;
+                /* Focus goes back to the opener on close; the attribute is put
+                   back exactly as it was found. */
+                lb.hadTabindex = opener.getAttribute('tabindex');
+                opener.tabIndex = -1;
+                lb.root.style.display = '';
+                lb.open = true;
+                document.documentElement.classList.add('ekb-lb-open');
+                document.addEventListener('keydown', lbOnKeydown, true);
+                /* Fit reads the stage's box, so the overlay has to be shown first. */
+                lbShowFit();
+                lb.closeButton.focus();
+            }
+
+            function lbClose() {
+                if (!lb.open) { return; }
+                lb.open = false;
+                lb.dragging = false;
+                lb.root.classList.remove('ekb-lb-drag');
+                lb.root.style.display = 'none';
+                while (lb.box.firstChild) { lb.box.removeChild(lb.box.firstChild); }
+                document.documentElement.classList.remove('ekb-lb-open');
+                document.removeEventListener('keydown', lbOnKeydown, true);
+                if (lb.opener) {
+                    /* Restore the attribute before focusing, and keep a
+                       tabindex="-1" on an opener that never had one: removing it
+                       blurs the element we just focused (measured in WebKit and
+                       Chromium), and an <img>/<pre> is only focusable through it.
+                       It stays out of the tab order either way. */
+                    if (lb.hadTabindex === null) {
+                        lb.opener.setAttribute('tabindex', '-1');
+                    } else {
+                        lb.opener.setAttribute('tabindex', lb.hadTabindex);
+                    }
+                    try { lb.opener.focus(); } catch (error) {}
+                    lb.opener = null;
+                    lb.hadTabindex = null;
+                }
+            }
+
+            function lbOpenImage(source) {
+                var img = document.createElement('img');
+                img.src = source.currentSrc || source.src;
+                img.alt = source.alt || '';
+                /* Pinned to the natural size so the box has its final layout size
+                   (which the centring translate measures) even before the cached
+                   bytes have decoded in the copy. */
+                img.width = source.naturalWidth;
+                img.height = source.naturalHeight;
+                lbOpen(img, source.naturalWidth, source.naturalHeight, source);
+            }
+
+            function lbOpenDiagram(diagram, svg) {
+                var rect = svg.getBoundingClientRect();
+                if (rect.width < 1 || rect.height < 1) { return; }
+                var clone = svg.cloneNode(true);
+                var w = Math.round(rect.width), h = Math.round(rect.height);
+                /* Mermaid styles its svg with max-width:100%; explicit dimensions
+                   plus max-width:none hold the clone at its rendered size, so the
+                   transform scales it instead of the stylesheet capping it. */
+                clone.setAttribute('width', String(w));
+                clone.setAttribute('height', String(h));
+                clone.style.maxWidth = 'none';
+                lbOpen(clone, w, h, diagram);
+            }
+
+            /* The one delegated entry point. Anything that is not a loaded image
+               or a rendered diagram falls through untouched, so the code-block
+               toolbar, the heading folds and plain links keep their behaviour. */
+            function enhanceLightbox() {
+                content.addEventListener('click', function (event) {
+                    var target = event.target;
+                    if (!target || !target.closest) { return; }
+                    var img = target.closest('img');
+                    if (img) {
+                        /* naturalWidth 0 means the picture never arrived (a blocked
+                           remote image's placeholder, say): leave the click alone. */
+                        if (img.naturalWidth === 0) { return; }
+                        event.preventDefault();
+                        event.stopPropagation();
+                        lbOpenImage(img);
+                        return;
+                    }
+                    var diagram = target.closest('.mermaid');
+                    if (diagram) {
+                        /* A mermaid source still waiting to render has no svg
+                           yet; without one there is nothing to preview. */
+                        var svg = diagram.querySelector('svg');
+                        if (!svg) { return; }
+                        event.preventDefault();
+                        event.stopPropagation();
+                        lbOpenDiagram(diagram, svg);
+                    }
+                });
+            }
+
+            if (document.readyState === 'loading') {
+                document.addEventListener('DOMContentLoaded', enhanceLightbox);
+            } else {
+                enhanceLightbox();
+            }
+        }
+
+        /* Covers math whose katex was already present when this script ran (the
+           injection gate above skipped, so its onload never fires). */
+        enhanceMath();
     })();
     """
 }

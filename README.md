@@ -23,10 +23,20 @@ both rendered entirely offline.
 - **Quick Look preview** — a full window in the Finder's Quick Look panel: the book's own
   text (or, for a scan or a comic, its pages) in a readable column, its images, and a covering
   page instead of a blank panel.
+- **Pictures zoom** — click any picture in a text book (EPUB, MOBI, AZW/AZW3, FictionBook,
+  CHM or Markdown) and it opens over the reader: `−`/`+` and the wheel zoom from 25% to
+  800% (the wheel keeps the point under the cursor), dragging pans, `Fit` resets, `Esc`
+  closes. A scan or a comic (DjVu, CBZ) keeps its own page zoom instead — there the
+  picture is the page, so `A−`/`A+` is the way to enlarge it.
 - **Markdown, with math and diagrams** — `.md`, `.markdown` and `.mdx` render as GFM.
   Inline and display LaTeX become real math via KaTeX, fenced `mermaid` blocks become
   diagrams, and heading ids keep `[text](#heading)` links working. Both libraries are
-  bundled, so nothing is fetched from the network.
+  bundled, so nothing is fetched from the network. Headings fold from a chevron in the
+  gutter, and a rendered diagram opens in the same zoomable overlay as a picture. A code
+  block gets a hover toolbar of its own: line numbers per block, and a block longer
+  than a dozen lines folds down to twelve. Drag the block's bottom-right corner to
+  set its height (double-click resets it) — a block taller than the height you give
+  it scrolls, with a visible scrollbar when it does.
 - **FictionBook** — `.fb2` opens with its base64 images inline. A book whose chapter titles
   were dropped by whatever converted it still gets a sidebar: the contents are read back out
   of the file's own section structure and headings, and the sidebar says at the top that they

@@ -601,11 +601,17 @@ enum ReaderAssets {
        sidebar (1), the status strip (4), the resume pill (5) and the scroll
        indicator (6). The cursor is the only affordance the picture itself needs. */
     html:not([data-format="djvu"]):not([data-format="cbz"]) #content img { cursor: zoom-in; }
+    /* The overlay is opaque on purpose: a translucent backdrop let the page's own
+       text show through a picture's transparent pixels *and* through a Mermaid
+       diagram's empty canvas, which read as two texts mixed together and made the
+       diagram unreadable (measured: the diagram's labels are theme colours, so on a
+       see-through black they were neither white nor dark enough). Chrome, not book
+       text, so one dark look in both themes. */
     .ekb-lb-open { overflow: hidden; }
     #ekb-lightbox {
         position: fixed; inset: 0; z-index: 1000;
         display: flex; flex-direction: column;
-        background: rgba(0, 0, 0, .86); color: #fff;
+        background: #0e0e0e; color: #fff;
         -webkit-user-select: none; user-select: none;
     }
     /* The control strip, top right. Px sizing, like the rest of the chrome, so
@@ -642,6 +648,25 @@ enum ReaderAssets {
        picture at the viewport, and the native drag would fight the pan. */
     #ekb-lightbox img {
         display: block; max-width: none; max-height: none; -webkit-user-drag: none;
+        /* A transparent PNG/SVG gets a checker plate instead of the overlay's
+           black: it is the viewer convention for "nothing here", and it keeps a
+           dark transparent logo visible (on black it vanished). Opaque pictures
+           cover the plate completely, so this costs them nothing. */
+        background-color: #fff;
+        background-image:
+            linear-gradient(45deg, #d5d5d5 25%, transparent 25%, transparent 75%, #d5d5d5 75%),
+            linear-gradient(45deg, #d5d5d5 25%, #fff 25%, #fff 75%, #d5d5d5 75%);
+        background-size: 16px 16px;
+        background-position: 0 0, 8px 8px;
+    }
+    /* Mermaid's canvas is transparent, so a zoomed diagram sat straight on the
+       overlay's black with the page text ghosting through it. The plate is the
+       page background the diagram was rendered on (`--gh-canvas`), painted solid
+       and padded by the script (LB_PLATE_PAD), so the clone looks exactly like it
+       did in the book and its edge labels keep a margin. */
+    #ekb-lightbox .ekb-lb-plate {
+        border-radius: 6px;
+        box-shadow: 0 10px 34px rgba(0, 0, 0, .5);
     }
 
     /* FictionBook: the elements FB2 has and HTML does not. Scoped to the format attribute a
@@ -1925,6 +1950,9 @@ enum ReaderAssets {
                never to #content, so the column's padding, the sidebar margin and
                the text zoom cannot move it. */
             var LB_MIN = 0.25, LB_MAX = 8;
+            /* The diagram plate's padding; the script and the CSS comment keep this
+               one number, and the fit adds it to the clone's size on both axes. */
+            var LB_PLATE_PAD = 12;
             var lb = {
                 root: null, stage: null, box: null, level: null, closeButton: null,
                 open: false, dragging: false,
@@ -2140,6 +2168,22 @@ enum ReaderAssets {
                 lbOpen(img, source.naturalWidth, source.naturalHeight, source);
             }
 
+            /* The diagram's plain canvas colour: a markdown page always declares
+               `--gh-canvas` (it is the GitHub skin's page background), so reading it
+               back gives the exact colour the diagram was rendered on, in either
+               theme. The hard-coded pair is only a fallback for a page that somehow
+               carries neither the variable nor the attribute. */
+            function lbDiagramCanvas() {
+                var scheme = document.documentElement.getAttribute('data-theme');
+                var canvas = scheme === 'dark' ? '#0d1117' : '#ffffff';
+                try {
+                    var declared = getComputedStyle(document.documentElement)
+                        .getPropertyValue('--gh-canvas').trim();
+                    if (declared) { canvas = declared; }
+                } catch (error) {}
+                return canvas;
+            }
+
             function lbOpenDiagram(diagram, svg) {
                 var rect = svg.getBoundingClientRect();
                 if (rect.width < 1 || rect.height < 1) { return; }
@@ -2151,7 +2195,17 @@ enum ReaderAssets {
                 clone.setAttribute('width', String(w));
                 clone.setAttribute('height', String(h));
                 clone.style.maxWidth = 'none';
-                lbOpen(clone, w, h, diagram);
+                /* The svg itself has no background, so a plate is what makes the
+                   diagram readable over the overlay: the transparent areas take the
+                   page's own canvas colour, the padding (counted into the size the
+                   fit uses) keeps edge labels off the plate's rim, and the shadow
+                   separates the two blacks. */
+                var plate = document.createElement('div');
+                plate.className = 'ekb-lb-plate';
+                plate.style.background = lbDiagramCanvas();
+                plate.style.padding = LB_PLATE_PAD + 'px';
+                plate.appendChild(clone);
+                lbOpen(plate, w + 2 * LB_PLATE_PAD, h + 2 * LB_PLATE_PAD, diagram);
             }
 
             /* The one delegated entry point. Anything that is not a loaded image

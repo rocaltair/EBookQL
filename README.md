@@ -26,8 +26,12 @@ both rendered entirely offline.
 - **Pictures zoom** — click any picture in a text book (EPUB, MOBI, AZW/AZW3, FictionBook,
   CHM or Markdown) and it opens over the reader: `−`/`+` and the wheel zoom from 25% to
   800% (the wheel keeps the point under the cursor), dragging pans, `Fit` resets, `Esc`
-  closes. A scan or a comic (DjVu, CBZ) keeps its own page zoom instead — there the
-  picture is the page, so `A−`/`A+` is the way to enlarge it.
+  closes. A diagram or a picture with transparent pixels sits on a solid plate (the
+  page's own background, or a checker for an image), never on the text behind it — a
+  Mermaid diagram is vector art with a transparent canvas, and on a see-through backdrop
+  the page's words read as part of the picture. A scan or a comic (DjVu, CBZ) keeps its
+  own page zoom instead — there the picture is the page, so `A−`/`A+` is the way to
+  enlarge it.
 - **Markdown, with math and diagrams** — `.md`, `.markdown` and `.mdx` render as GFM.
   Inline and display LaTeX become real math via KaTeX, fenced `mermaid` blocks become
   diagrams, and heading ids keep `[text](#heading)` links working. Both libraries are

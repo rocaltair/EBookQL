@@ -33,14 +33,16 @@ both rendered entirely offline.
   own page zoom instead — there the picture is the page, so `A−`/`A+` is the way to
   enlarge it.
 - **Markdown, with math and diagrams** — `.md`, `.markdown` and `.mdx` render as GFM.
-  Inline and display LaTeX become real math via KaTeX, fenced `mermaid` blocks become
-  diagrams, and heading ids keep `[text](#heading)` links working. Both libraries are
-  bundled, so nothing is fetched from the network. Headings fold from a chevron in the
-  gutter, and a rendered diagram opens in the same zoomable overlay as a picture. A code
-  block gets a hover toolbar of its own: line numbers per block, and a block longer
-  than a dozen lines folds down to twelve. Drag the block's bottom-right corner to
-  set its height (double-click resets it) — a block taller than the height you give
-  it scrolls, with a visible scrollbar when it does.
+  Inline and display LaTeX become real math via KaTeX; `$…$`, `$$…$$`, `\(...\)`,
+  `\[...\]`, fenced `math` / `latex` / `tex` blocks and MathJax's common
+  `\begin{…}` environments are accepted. Fenced `mermaid` blocks become diagrams,
+  and heading ids keep `[text](#heading)` links working. Both libraries are bundled,
+  so nothing is fetched from the network. Headings fold from a chevron in the gutter,
+  and a rendered diagram opens in the same zoomable overlay as a picture. A code block
+  gets a hover toolbar of its own: line numbers per block, and a block longer than a
+  dozen lines folds down to twelve. Drag the block's bottom-right corner to set its
+  height (double-click resets it) — a block taller than the height you give it scrolls,
+  with a visible scrollbar when it does.
 - **FictionBook** — `.fb2` opens with its base64 images inline. A book whose chapter titles
   were dropped by whatever converted it still gets a sidebar: the contents are read back out
   of the file's own section structure and headings, and the sidebar says at the top that they
@@ -161,9 +163,11 @@ type, and `.mdx` is EBookQL's own type conforming to it.
 `.md`, `.markdown` and `.mdx` get the same reader as books. GitHub-flavored Markdown is
 parsed by an embedded copy of `marked`, and the sidebar is derived from the headings it
 generates, so `[text](#heading)` links keep working. Inline and display LaTeX (`$…$`,
-`$$…$$`, `\(…\)`, `\[…\]`) is typeset with KaTeX, and fenced `mermaid` blocks become
-diagrams. Both libraries are vendored and served through the extension's own scheme, so
-math and diagrams work with no network at all.
+`$$…$$`, `\(…\)`, `\[…\]`) is typeset with KaTeX. Fenced `math`, `latex` and `tex`
+blocks and bare MathJax environments such as `\begin{equation}…\end{equation}` and
+`\begin{align}…\end{align}` work too; fenced `mermaid` blocks become diagrams. Both
+libraries are vendored and served through the extension's own scheme, so math and
+diagrams work with no network at all.
 
 The app window is where Markdown is configured, in its Markdown tab: render with JavaScript
 or show the raw source, line numbers, System/Light/Dark, and whether a remote

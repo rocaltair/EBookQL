@@ -104,9 +104,10 @@ enum MarkdownAssets {
 
     /// Configures marked for the reader: GFM, GitHub-style heading ids, mermaid
     /// fences as `<pre class="mermaid">`, `$` / `$$` / `\(` / `\[` math as
-    /// `math-inline` / `math-block`, and MDX import/export line stripping.
+    /// `math-inline` / `math-block`, MathJax environments, and MDX import/export
+    /// line stripping.
     static let bootstrapJS = """
-    // MarkdownAssets.bootstrapJS — final candidate, verified in node.
+    // MarkdownAssets.bootstrapJS — reader HTML contract.
     // Requires a global `marked` (the UMD build of marked 18.0.14).
     (function () {
       'use strict';
@@ -176,7 +177,9 @@ enum MarkdownAssets {
         };
       }
 
-      // $$...$$ / \\[...\\] at the start of a block -> math-block div.
+      // $$...$$ / \\[...\\] / a bare MathJax environment at the start of a block
+      // -> math-block div. The environment form is what documents written for
+      // MathJax commonly use without dollar delimiters.
       marked.use({
         extensions: [{
           name: 'mathBlock',
@@ -184,15 +187,21 @@ enum MarkdownAssets {
           start: function (src) {
             var a = src.indexOf('$$');
             var b = src.indexOf('\\\\[');
-            if (a < 0) return b;
-            if (b < 0) return a;
-            return Math.min(a, b);
+            var environment = /\\\\begin\\{(?:equation\\*?|align\\*?|alignat\\*?|gather\\*?|multline\\*?|eqnarray\\*?|displaymath|math|array|darray\\*?|dcases\\*?|cases\\*?|rcases\\*?|matrix\\*?|pmatrix\\*?|bmatrix\\*?|Bmatrix\\*?|vmatrix\\*?|Vmatrix\\*?|smallmatrix\\*?|subarray|aligned|alignedat|gathered|split|CD\\*?)\\}/.exec(src);
+            var c = environment ? environment.index : -1;
+            var best = -1;
+            [a, b, c].forEach(function (at) {
+              if (at >= 0 && (best < 0 || at < best)) best = at;
+            });
+            return best;
           },
           tokenizer: function (src) {
             var match = /^\\$\\$([\\s\\S]+?)\\$\\$[ \\t]*(?:\\n+|$)/.exec(src);
             if (match) return mathToken('mathBlock', match[1], match[0]);
             match = /^\\\\\\[([\\s\\S]+?)\\\\\\][ \\t]*(?:\\n+|$)/.exec(src);
             if (match) return mathToken('mathBlock', match[1], match[0]);
+            match = /^\\\\begin\\{(equation\\*?|align\\*?|alignat\\*?|gather\\*?|multline\\*?|eqnarray\\*?|displaymath|math|array|darray\\*?|dcases\\*?|cases\\*?|rcases\\*?|matrix\\*?|pmatrix\\*?|bmatrix\\*?|Bmatrix\\*?|vmatrix\\*?|Vmatrix\\*?|smallmatrix\\*?|subarray|aligned|alignedat|gathered|split|CD\\*?)\\}[\\s\\S]*?\\\\end\\{\\1\\}[ \\t]*(?:\\n+|$)/.exec(src);
+            if (match) return mathToken('mathBlock', match[0], match[0]);
             return undefined;
           },
           renderer: function (token) {
@@ -202,6 +211,7 @@ enum MarkdownAssets {
       });
 
       // $...$ / \\(...\\) inline -> math-inline span; stray $$ / \\[...\\] -> block div.
+      // MathJax's inline `math` environment is accepted too.
       marked.use({
         extensions: [{
           name: 'mathInline',
@@ -221,6 +231,8 @@ enum MarkdownAssets {
             match = /^\\\\\\[([\\s\\S]+?)\\\\\\]/.exec(src);
             if (match) return mathToken('mathBlock', match[1], match[0]);
             match = /^\\\\\\(([\\s\\S]+?)\\\\\\)/.exec(src);
+            if (match) return mathToken('mathInline', match[1], match[0]);
+            match = /^\\\\begin\\{math\\}([\\s\\S]+?)\\\\end\\{math\\}/.exec(src);
             if (match) return mathToken('mathInline', match[1], match[0]);
             // Reject a leading/trailing space so "$5 and $10" is not read as math.
             match = /^\\$(?![\\s$])([^\\n$]*[^\\s$])\\$/.exec(src);
@@ -256,6 +268,9 @@ enum MarkdownAssets {
             var lang = String(token.lang || '').trim().split(/\\s+/)[0].toLowerCase();
             if (lang === 'mermaid') {
               return '<pre class="mermaid">' + escapeHTML(token.text) + '</pre>\\n';
+            }
+            if (lang === 'math' || lang === 'latex' || lang === 'tex') {
+              return '<div class="math-block">' + escapeHTML(token.text) + '</div>\\n';
             }
             return false;
           }

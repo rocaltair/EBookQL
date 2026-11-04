@@ -15,7 +15,7 @@ The Markdown backend: `md` / `markdown` / `mdx` → `Book`. One section, no decl
 - Optional leading `---…---` YAML front matter feeds ONLY title/author; anything richer than `key: value` is ignored, and an unclosed block is left in the body. Title priority: front matter, then first rendered `<h1>`, then filename.
 - `MarkdownRenderer.html(from:)` builds a FRESH `JSContext` per call (JavaScriptCore is not thread-safe), evaluates `marked` 18.0.14 then the bootstrap, and calls `globalThis.renderMarkdown`. Any failure throws `BookParseError.malformed`.
 - `markdownRendering == false` skips JavaScriptCore and returns the escaped raw source inside `<pre class="markdown-source">`.
-- Fidelity: GFM; slug heading `id`s; mermaid fences → `<pre class="mermaid">` (escaped); `$…$` / `\(…\)` → `.math-inline`; `$$…$$` / `\[…\]` → `.math-block`; math inside code fences/inline code is NOT extracted; `$5 and $10` is not misread as math; MDX lone `import` / `export` lines are dropped.
+- Fidelity: GFM; slug heading `id`s; mermaid fences → `<pre class="mermaid">` (escaped); `$…$` / `\(…\)` → `.math-inline`; `$$…$$` / `\[…\]` → `.math-block`; fenced `math` / `latex` / `tex` and bare MathJax environments (`equation`, `align`, `matrix`, etc.) → `.math-block`; math inside ordinary code fences/inline code is NOT extracted; `$5 and $10` is not misread as math; MDX lone `import` / `export` lines are dropped.
 
 ## ANTI-PATTERNS
 - Sharing one `JSContext` between parses.

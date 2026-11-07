@@ -5,11 +5,12 @@ The reader host shared by every host that shows a book: the app's reader windows
 ## WHERE TO LOOK
 | Task | Location |
 |------|----------|
-| Load a book into the reader | BookReaderViewController.swift:136 (`loadBook`) |
-| WebView + message channels | BookReaderViewController.swift:84 (`loadView`) |
-| Parse + page build off the main thread | BookReaderViewController.swift:249 (`render`) |
-| JS→native handlers (position / ui / zoom / copy) | BookReaderViewController.swift:301 |
-| Reading position read/write | BookReaderViewController.swift:152 / :333 |
+| Load a book into the reader | BookReaderViewController.swift:141 (`loadBook`) |
+| Watch an open Markdown file for saves | MarkdownFileWatcher.swift |
+| WebView + message channels | BookReaderViewController.swift:89 (`loadView`) |
+| Parse + page build off the main thread | BookReaderViewController.swift:269 (`render`) |
+| JS→native handlers (position / ui / zoom / copy) | BookReaderViewController.swift:321 |
+| Reading position read/write | BookReaderViewController.swift:167 / :344 |
 | Zoom ladder + persistence | BookReaderViewController.swift:30–50, :385 |
 | External-link policy (app only) | BookReaderViewController.swift:405 |
 | Temp extraction dirs + stale sweep | BookReaderViewController.swift:170, :438 |
@@ -26,6 +27,7 @@ The reader host shared by every host that shows a book: the app's reader windows
 - `workDirectoryPrefix` separates hosts' temp dirs (`EBookQL_` for appexes, `EBookQLReader_` for the app) so one host's stale sweep can never delete a directory another live host is still reading from.
 - Resources are reached through `ekbres://`, and the reserved `assets` host reads `Bundle.main` - the appex bundle in Quick Look, the app bundle in the app. Both bundles therefore carry `ReaderAssets/` (app) and `DjVuAssets/` (app) at their resource root, flat.
 - A load carries a generation token: a slow render for a book the reader has already navigated away from is dropped instead of painting over the newer one.
+- Only Markdown is watched. `MarkdownFileWatcher` debounces file events and is restarted after each reload, because an atomic editor save replaces the inode and the old descriptor stops reporting. A refresh keeps the current page visible while rendering, asks the live page for its exact anchor/offset before navigation, and restores it during the new page's first layout without the resume pill. The database row cannot be used directly because it was stored with the previous file size.
 
 ## ANTI-PATTERNS
 - Making this file import QuickLookUI or SwiftUI: it is compiled into the app, which needs neither for the reader itself.

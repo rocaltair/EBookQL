@@ -41,6 +41,9 @@ public struct ReaderDocument {
         /// Whether markdown code blocks show line numbers. Passed through to the
         /// page as `window.__ql.lineNumbers`; ignored by every other format.
         public var showLineNumbers: Bool
+        /// Whether restoring a saved position may show the "Resumed at ..." pill.
+        /// A live Markdown refresh restores silently; an ordinary open keeps it.
+        public var showsResumeHint: Bool
 
         public init(
             readingPosition: ReadingPosition? = nil,
@@ -52,7 +55,8 @@ public struct ReaderDocument {
             tocTitle: String = ReaderDocument.localizedTOCTitle(),
             theme: MarkdownTheme = .system,
             markdownRendering: Bool = true,
-            showLineNumbers: Bool = false
+            showLineNumbers: Bool = false,
+            showsResumeHint: Bool = true
         ) {
             self.readingPosition = readingPosition
             self.sidebarWidth = sidebarWidth
@@ -64,6 +68,7 @@ public struct ReaderDocument {
             self.theme = theme
             self.markdownRendering = markdownRendering
             self.showLineNumbers = showLineNumbers
+            self.showsResumeHint = showsResumeHint
         }
     }
 
@@ -412,6 +417,7 @@ public struct ReaderDocument {
             "jsParse": options.markdownRendering,
             "lineNumbers": options.showLineNumbers,
             "autoFoldTOC": options.autoFoldTOC,
+            "showsResumeHint": options.showsResumeHint,
         ]
         if let width = options.sidebarWidth { dict["sidebarWidth"] = width }
         if let position = options.readingPosition {

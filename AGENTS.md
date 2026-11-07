@@ -43,6 +43,7 @@ EBookQL/
 | Reader page, TOC sidebar, CSS/JS, theme | EBookQLKit/Reader/ | see Reader/AGENTS.md |
 | Reading-position persistence | EBookQLKit/Store/ReadingPositionStore.swift | SQLite, one table |
 | Reader host (WebView, messages, position, zoom) | EBookQLReader/ | shared by the app and the preview appexes; see its AGENTS.md |
+| Markdown file updates while reading | EBookQLReader/MarkdownFileWatcher.swift | debounced `DispatchSource` watcher; re-arms after atomic replacement |
 | Quick Look entry point, panel size | EBookQLPreview/ReaderPreviewProvider.swift | thin adapter; see EBookQLPreview/AGENTS.md |
 | Open a book in the app, reader windows, Open… | EBookQLApp/ReaderWindows.swift | one window per book URL, deduplicated |
 | Settings window (AppKit-hosted SwiftUI) | EBookQLApp/SettingsWindow.swift | created on demand, not by a SwiftUI scene |
@@ -100,6 +101,7 @@ EBookQL/
 - All formats share one renderer + one CSS/JS. No per-format UI forks.
 - `Book.toc` may be empty by contract; the renderer derives a TOC from `<h1..h3>` and the richer source wins.
 - Markdown is ONE section (`id "md"`) with `toc = []` and `tocIsFallback: false`: the renderer derives the sidebar from the GitHub-style heading ids `marked` emits, so `[x](#slug)` links survive anchor prefixing.
+- An open Markdown reader watches its source file and rebuilds the page after saves. Before replacing it, the host asks the live page for its current anchor and offset; the new page restores them during its first layout, without the resume pill. The stored row cannot be used directly because it was size-checked against the old file.
 - Markdown rendering runs embedded `marked` 18.0.14 in a fresh `JSContext` per parse (JavaScriptCore; not thread-safe, so never shared). Any engine failure becomes `BookParseError.malformed`.
 - Only a Markdown page carries `data-theme="light|dark"` and only it ever fetches the vendored Mermaid/KaTeX assets. EPUB/MOBI pages get no `data-theme` and keep following `prefers-color-scheme`.
 - One format, one `data-format` attribute: `ReaderDocument.build` tags the root with `data-format="markdown|fb2|djvu|cbz"` and every format-specific CSS rule in `ReaderAssets.css` is scoped under it, so a rule written for one format cannot touch another. DjVu and CBZ deliberately share one skin (the page-image skin) under both attributes rather than each getting its own. The one exception is the image lightbox, which every *text* format gets (EPUB/MOBI/CHM carry no attribute at all): it is scoped by `#ekb-lightbox` and a `:not([data-format="djvu"]):not([data-format="cbz"])` gate on the zoom-in cursor, never by an allow-list of formats.

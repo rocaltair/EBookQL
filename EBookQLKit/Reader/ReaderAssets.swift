@@ -1111,8 +1111,14 @@ enum ReaderAssets {
                 sectionOffset = (scroll - m.offsets[i]) / spanAt(m, i);
             }
             sectionOffset = Math.min(1, Math.max(0, sectionOffset));
-            return { anchor: anchor, sectionOffset: sectionOffset, fraction: scroll / m.height };
+            return {
+                anchor: anchor,
+                sectionOffset: sectionOffset,
+                fraction: scroll / m.height,
+                scrollY: scroll
+            };
         }
+        window.ekbCapturePosition = place;
 
         var armed = false, lastSent = 0, timer = null;
         function report() {
@@ -1164,6 +1170,18 @@ enum ReaderAssets {
             if (!saved || userTookOver) { return; }
             dropLayout();
 
+            /* Markdown has no content-visibility sections, so its heading offsets
+               are exact. Using them restores both the anchor and the offset inside
+               that section before the first paint, instead of jumping to the
+               heading and then adjusting by the heading's own height. */
+            if (document.documentElement.getAttribute('data-format') === 'markdown') {
+                var exact = targetOffset();
+                if (exact > 1) {
+                    window.scrollTo(0, exact);
+                    return;
+                }
+            }
+
             if (saved.anchor) {
                 var element = document.getElementById(saved.anchor);
                 if (element) {
@@ -1184,6 +1202,7 @@ enum ReaderAssets {
         });
 
         function showResumeHint(fraction) {
+            if (state.showsResumeHint === false) { return; }
             if (fraction < 0.02) { return; }
             var pill = document.createElement('div');
             pill.id = 'ekb-resume';
@@ -1372,20 +1391,23 @@ enum ReaderAssets {
         /* ---------- start ---------- */
 
         buildScrollbar();
+        applyRestore();
         refreshScrollbar();
         updateCurrent();
         if (document.readyState !== 'complete') {
             window.addEventListener('load', function () { applyRestore(); updateCurrent(); refreshScrollbar(); });
         }
 
-        /* Recording only starts once the restore has settled, so the 0 a fresh page
-           reports can never overwrite a real position. */
+        /* Recording only starts once the restore has settled, so a fresh page's
+           first 0 cannot overwrite a real position. Send once even when there was
+           no saved position: a reader that scrolls before the old 3 s arm delay
+           must still be captured before a live Markdown refresh replaces the page. */
         setTimeout(function () {
+            var landed = place();
             if (saved && !userTookOver) {
-                var landed = place();
                 if (landed.fraction >= 0.02) { showResumeHint(landed.fraction); }
-                send(positionBridge, landed);
             }
+            send(positionBridge, landed);
             armed = true;
         }, 3000);
 

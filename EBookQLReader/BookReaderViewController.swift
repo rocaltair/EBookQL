@@ -58,6 +58,11 @@ class BookReaderViewController: NSViewController, WKNavigationDelegate, WKScript
     private(set) var workDirectory: URL?
     private(set) var currentBookURL: URL?
     private var currentBookSize: Int?
+    /// The last position reported by the live page. A Markdown refresh must carry
+    /// this explicitly: the file size has changed, so the database's size check
+    /// correctly rejects the old row for a normal open.
+    private var latestReadingPosition: ReadingPosition?
+    private var markdownWatcher: MarkdownFileWatcher?
     private var zoom: CGFloat = BookReaderViewController.storedZoom
     private var lastZoomCommand = Date.distantPast
     /// Identifies the in-flight load, so a slow render for a book the reader has
@@ -134,6 +139,19 @@ class BookReaderViewController: NSViewController, WKNavigationDelegate, WKScript
     // MARK: - Loading
 
     func loadBook(at url: URL, completion: ((Error?) -> Void)? = nil) {
+        loadBook(
+            at: url, restoring: nil, showingLoadingPage: true, showsResumeHint: true,
+            completion: completion
+        )
+    }
+
+    private func loadBook(
+        at url: URL,
+        restoring position: ReadingPosition?,
+        showingLoadingPage: Bool,
+        showsResumeHint: Bool,
+        completion: ((Error?) -> Void)? = nil
+    ) {
         startedAt = Date()
         os_log("open %{public}@", log: log, type: .info, url.path)
 
@@ -144,12 +162,14 @@ class BookReaderViewController: NSViewController, WKNavigationDelegate, WKScript
         // has to stay open for the whole read, not just the parsing step.
         releaseSecurityScope()
         if url.startAccessingSecurityScopedResource() { scopedResourceURL = url }
-        currentBookURL = url.standardizedFileURL
+        let bookURL = url.standardizedFileURL
+        currentBookURL = bookURL
 
         let bookSize = (try? FileManager.default.attributesOfItem(atPath: url.path))?[.size] as? Int
         currentBookSize = bookSize
 
-        let savedPosition = readingPositionStore.position(for: url, size: bookSize)
+        let savedPosition = position ?? readingPositionStore.position(for: url, size: bookSize)
+        latestReadingPosition = savedPosition
         if let savedPosition {
             os_log("restoring anchor=%{public}@ fraction=%.3f",
                    log: log, type: .info, savedPosition.anchor ?? "-", savedPosition.fraction)
@@ -170,10 +190,14 @@ class BookReaderViewController: NSViewController, WKNavigationDelegate, WKScript
         Self.removeStaleWorkDirectories(
             prefix: workDirectoryPrefix, keeping: workDirectory, olderThan: staleWorkDirectoryAge)
 
+        startMarkdownWatcher(at: bookURL)
+
         let token = UUID()
         generation = token
 
-        webView.loadHTMLString(Self.loadingHTML(for: url), baseURL: nil)
+        if showingLoadingPage {
+            webView.loadHTMLString(Self.loadingHTML(for: url), baseURL: nil)
+        }
         // Stop Finder's spinner promptly; the page fills in after.
         completion?(nil)
 
@@ -188,7 +212,8 @@ class BookReaderViewController: NSViewController, WKNavigationDelegate, WKScript
             tocTitle: ReaderDocument.localizedTOCTitle(),
             theme: Self.resolvedTheme(settings.theme),
             markdownRendering: settings.jsParse,
-            showLineNumbers: settings.showLineNumbers
+            showLineNumbers: settings.showLineNumbers,
+            showsResumeHint: showsResumeHint
         )
 
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
@@ -323,13 +348,8 @@ class BookReaderViewController: NSViewController, WKNavigationDelegate, WKScript
 
     private func handlePosition(_ body: [String: Any]) {
         guard let url = currentBookURL else { return }
-        let position = ReadingPosition(
-            anchor: body["anchor"] as? String,
-            sectionOffset: body["sectionOffset"] as? Double ?? 0,
-            fraction: body["fraction"] as? Double ?? 0,
-            scrollY: body["scrollY"] as? Double ?? 0,
-            updated: Date().timeIntervalSince1970
-        )
+        let position = readingPosition(from: body)
+        latestReadingPosition = position
         readingPositionStore.store(position, for: url, size: currentBookSize)
         os_log("position %{public}@ anchor=%{public}@ section=%.3f fraction=%.4f",
                log: log, type: .debug,
@@ -419,8 +439,63 @@ class BookReaderViewController: NSViewController, WKNavigationDelegate, WKScript
     // MARK: - Bookkeeping
 
     private func releaseSecurityScope() {
+        markdownWatcher?.stop()
+        markdownWatcher = nil
         scopedResourceURL?.stopAccessingSecurityScopedResource()
         scopedResourceURL = nil
+    }
+
+    private func startMarkdownWatcher(at url: URL) {
+        markdownWatcher?.stop()
+        markdownWatcher = nil
+        guard MarkdownBackend.supportedExtensions.contains(url.pathExtension.lowercased()) else { return }
+
+        let watcher = MarkdownFileWatcher(url: url) { [weak self] in
+            self?.markdownFileDidChange()
+        }
+        markdownWatcher = watcher
+        watcher.start()
+    }
+
+    private func markdownFileDidChange() {
+        guard let url = currentBookURL,
+              MarkdownBackend.supportedExtensions.contains(url.pathExtension.lowercased()) else { return }
+
+        os_log("markdown changed; reloading %{public}@", log: log, type: .info, url.lastPathComponent)
+        // Ask the live page for its position instead of waiting for the scroll
+        // reporter: the reader may have stopped scrolling more than one debounce
+        // ago, or before the page's initial 3 s recording delay had elapsed.
+        captureReadingPosition { [weak self] captured in
+            guard let self, self.currentBookURL == url else { return }
+            let position = captured
+                ?? self.latestReadingPosition
+                ?? self.readingPositionStore.position(for: url, size: self.currentBookSize)
+            self.loadBook(
+                at: url, restoring: position, showingLoadingPage: false, showsResumeHint: false
+            )
+        }
+    }
+
+    private func captureReadingPosition(_ completion: @escaping (ReadingPosition?) -> Void) {
+        webView.evaluateJavaScript(
+            "window.ekbCapturePosition ? window.ekbCapturePosition() : null"
+        ) { result, _ in
+            guard let body = result as? [String: Any] else {
+                completion(nil)
+                return
+            }
+            completion(self.readingPosition(from: body))
+        }
+    }
+
+    private func readingPosition(from body: [String: Any]) -> ReadingPosition {
+        ReadingPosition(
+            anchor: body["anchor"] as? String,
+            sectionOffset: body["sectionOffset"] as? Double ?? 0,
+            fraction: body["fraction"] as? Double ?? 0,
+            scrollY: body["scrollY"] as? Double ?? 0,
+            updated: Date().timeIntervalSince1970
+        )
     }
 
     private static func loadingHTML(for url: URL) -> String {

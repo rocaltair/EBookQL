@@ -181,6 +181,10 @@ remote image.
 With JavaScript rendering off, a file is shown as escaped source instead, which is handy for
 inspecting the markup; math and diagrams then appear as their source text.
 
+If the Markdown file changes while it is open, the reader rebuilds it automatically. Both
+in-place saves and editors that replace the file atomically are detected; the page keeps its
+current reading position and does not flash a loading page during the refresh.
+
 ## FictionBook
 
 `.fb2` files are XML with their images embedded as base64, so a preview is the file itself —

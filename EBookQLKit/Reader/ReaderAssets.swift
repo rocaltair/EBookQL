@@ -83,6 +83,16 @@ enum ReaderAssets {
     }
     .anchor-target { display: block; height: 0; overflow: hidden; }
 
+    /* In-book find, driven by the app's native find bar. The page only owns the
+       highlights; text entry and keyboard handling stay in AppKit. */
+    mark.ekb-hit {
+        background: rgba(255, 214, 10, .55); color: inherit; border-radius: 2px;
+    }
+    mark.ekb-hit.ekb-current {
+        background: #ff9f0a; color: #1c1c1e;
+        box-shadow: 0 0 0 2px rgba(255, 159, 10, .45);
+    }
+
     #content { padding: 28px 32px 60vh 32px; }
     body:not(.no-toc) #content { margin-inline-start: var(--toc-width); }
 
@@ -1570,6 +1580,194 @@ enum ReaderAssets {
         var format = document.documentElement.getAttribute('data-format');
         var markdown = format === 'markdown';
         var pageImage = format === 'djvu' || format === 'cbz';
+
+        /* ---------- host-driven find ---------- */
+
+        /* The app's native find bar drives this block. Quick Look has no entry point,
+           so the page owns no focusable search control and the historical key-window
+           problem cannot recur. Matches are wrapped in the book's own text nodes so
+           the current hit can be marked and scrolled to in place. */
+        var findHits = [];
+        var findIndex = -1;
+        var findQuery = '';
+        var findJumpToken = 0;
+        var FIND_MAX_HITS = 1000;
+        var FIND_RETRY_DELAYS = [60, 240, 700, 1500];
+
+        function findSummary() {
+            return {
+                available: !pageImage,
+                total: findHits.length,
+                index: findIndex >= 0 ? findIndex + 1 : 0,
+                capped: findHits.length >= FIND_MAX_HITS,
+                query: findQuery
+            };
+        }
+
+        function clearFindHits() {
+            var hadHits = findHits.length > 0;
+            var parents = [];
+            for (var i = 0; i < findHits.length; i++) {
+                var mark = findHits[i];
+                var parent = mark.parentNode;
+                if (!parent) { continue; }
+                while (mark.firstChild) { parent.insertBefore(mark.firstChild, mark); }
+                parent.removeChild(mark);
+                if (parents.indexOf(parent) === -1) { parents.push(parent); }
+            }
+            for (var j = 0; j < parents.length; j++) {
+                if (parents[j].normalize) { parents[j].normalize(); }
+            }
+            findHits = [];
+            findIndex = -1;
+            findJumpToken++;
+            return hadHits;
+        }
+
+        function wrapFindMatch(node, offset, length) {
+            var mark = document.createElement('mark');
+            mark.className = 'ekb-hit';
+            try {
+                var range = document.createRange();
+                range.setStart(node, offset);
+                range.setEnd(node, offset + length);
+                range.surroundContents(mark);
+            } catch (error) {
+                return;
+            }
+            findHits.push(mark);
+        }
+
+        function revealFindTarget(mark) {
+            var changed = false;
+            for (var box = mark.parentElement; box && box !== content; box = box.parentElement) {
+                if (!box.classList || !box.classList.contains('ekb-folded')) { continue; }
+                box.classList.remove('ekb-folded');
+                var head = box.firstElementChild;
+                var toggle = head && head.firstElementChild;
+                if (toggle && toggle.classList.contains('ekb-fold-toggle')) {
+                    toggle.setAttribute('aria-expanded', 'true');
+                    toggle.textContent = '\\u25be';
+                    toggle.title = 'Fold section';
+                }
+                changed = true;
+            }
+
+            var pre = mark.closest ? mark.closest('pre.ekb-folded') : null;
+            if (pre) {
+                pre.classList.remove('ekb-folded');
+                var holder = pre.parentElement;
+                var foldButton = holder && holder.querySelector
+                    ? holder.querySelector('.ekb-fold-btn') : null;
+                if (foldButton) {
+                    foldButton.setAttribute('aria-expanded', 'true');
+                    foldButton.textContent = '\\u25be';
+                    foldButton.title = 'Fold code block';
+                }
+                changed = true;
+            }
+
+            if (changed) {
+                dropLayout();
+                refreshScrollbar();
+                updateCurrent();
+            }
+        }
+
+        function settleFindHit(mark, token) {
+            if (token !== findJumpToken) { return; }
+            revealFindTarget(mark);
+            var box = mark.getBoundingClientRect();
+            if (box.height > 0 && box.top >= 0 && box.bottom <= window.innerHeight) { return; }
+            try { mark.scrollIntoView({ block: 'center' }); }
+            catch (error) { mark.scrollIntoView(true); }
+            dropLayout();
+        }
+
+        function gotoFindHit(index) {
+            if (!findHits.length) { return findSummary(); }
+            findIndex = ((index % findHits.length) + findHits.length) % findHits.length;
+            for (var i = 0; i < findHits.length; i++) {
+                findHits[i].classList.toggle('ekb-current', i === findIndex);
+            }
+            var mark = findHits[findIndex];
+            var token = ++findJumpToken;
+            settleFindHit(mark, token);
+            FIND_RETRY_DELAYS.forEach(function (delay) {
+                setTimeout(function () { settleFindHit(mark, token); }, delay);
+            });
+            return findSummary();
+        }
+
+        function runInBookFind(text) {
+            var hadHits = clearFindHits();
+            findQuery = String(text || '').trim();
+            if (findQuery) {
+                var needle = findQuery.toLowerCase();
+                var queryFoldable = needle.length === findQuery.length;
+                var found = [];
+                var filter = {
+                    acceptNode: function (node) {
+                        var parent = node.parentElement;
+                        if (!parent) { return NodeFilter.FILTER_REJECT; }
+                        if (parent.closest('script, style, noscript, svg, math, .mermaid, .katex, .ekb-fold-toggle, .ekb-tools, .ekb-resize, #ekb-lightbox')) {
+                            return NodeFilter.FILTER_REJECT;
+                        }
+                        return NodeFilter.FILTER_ACCEPT;
+                    }
+                };
+                var walker = document.createTreeWalker(content, NodeFilter.SHOW_TEXT, filter);
+                var node;
+                while (found.length < FIND_MAX_HITS && (node = walker.nextNode())) {
+                    var value = node.nodeValue;
+                    if (!value) { continue; }
+                    var haystack = value;
+                    if (queryFoldable) {
+                        var lower = value.toLowerCase();
+                        if (lower.length === value.length) { haystack = lower; }
+                    }
+                    var from = 0, at;
+                    while ((at = haystack.indexOf(needle, from)) !== -1) {
+                        found.push([node, at]);
+                        from = at + findQuery.length;
+                        if (found.length >= FIND_MAX_HITS) { break; }
+                    }
+                }
+                for (var i = found.length - 1; i >= 0; i--) {
+                    wrapFindMatch(found[i][0], found[i][1], findQuery.length);
+                }
+                findHits.reverse();
+            }
+            dropLayout();
+            refreshScrollbar();
+            if (findHits.length) { return gotoFindHit(0); }
+            if (!hadHits) { updateCurrent(); }
+            return findSummary();
+        }
+
+        window.ekbFind = function (text) {
+            if (pageImage) { return findSummary(); }
+            return runInBookFind(text);
+        };
+        window.ekbFindStep = function (delta) {
+            if (pageImage || !findHits.length) { return findSummary(); }
+            return gotoFindHit(findIndex + (Number(delta) < 0 ? -1 : 1));
+        };
+        window.ekbFindClose = function () {
+            var hadHits = clearFindHits();
+            findQuery = '';
+            if (hadHits) {
+                dropLayout();
+                refreshScrollbar();
+                updateCurrent();
+            }
+            return findSummary();
+        };
+
+        ['wheel', 'touchstart'].forEach(function (name) {
+            window.addEventListener(name, function () { findJumpToken++; },
+                                    { passive: true, capture: true });
+        });
 
         /* GitHub-style tools on fenced code blocks: a line-number toggle, a fold
            toggle on long blocks, and the copy button, in one .ekb-tools bar per

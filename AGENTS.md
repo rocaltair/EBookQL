@@ -46,6 +46,7 @@ EBookQL/
 | Markdown file updates while reading | EBookQLReader/MarkdownFileWatcher.swift | debounced `DispatchSource` watcher; re-arms after atomic replacement |
 | Quick Look entry point, panel size | EBookQLPreview/ReaderPreviewProvider.swift | thin adapter; see EBookQLPreview/AGENTS.md |
 | Open a book in the app, reader windows, Open… | EBookQLApp/ReaderWindows.swift | one window per book URL, deduplicated |
+| App-only text find, native bar, keyboard | EBookQLApp/ReaderFindBar.swift | wraps the shared reader; no Quick Look entry |
 | Settings window (AppKit-hosted SwiftUI) | EBookQLApp/SettingsWindow.swift | created on demand, not by a SwiftUI scene |
 | Markdown-only appexes | EBookQLMarkdownPreview/ + EBookQLMarkdownThumbnail/ | Info.plist + entitlements only; sources shared from the EPUB/MOBI appexes |
 | Thumbnail card drawing | EBookQLThumbnail/ThumbnailProvider.swift | CoreGraphics card |
@@ -77,6 +78,7 @@ EBookQL/
 | `ReaderSchemeHandler` | class | Reader/ReaderSchemeHandler.swift:17 | `ekbres://` scheme for both the app and the appexes |
 | `ReaderSettings` | struct | Reader/ReaderSettings.swift:12 | what a host feeds the reader (jsParse/theme/… ) |
 | `ReaderWindows` | class | EBookQLApp/ReaderWindows.swift:21 | app: one NSWindow per book, Open…, settings reload |
+| `ReaderFindBar` / `ReaderWindowContentViewController` | class | EBookQLApp/ReaderFindBar.swift | native find bar around the shared reader; app windows only |
 | `SettingsWindow` | class | EBookQLApp/SettingsWindow.swift:15 | app: the configuration window |
 | `HTMLNormalizer` | enum | Kit/Reader/HTMLNormalizer.swift:16 | anchor prefix / link rewrite / body extract |
 | `ReaderAssets.css` / `.js` | enum | Kit/Reader/ReaderAssets.swift:17 / :216 | the entire reader UI (string literals) |
@@ -93,6 +95,7 @@ EBookQL/
 - No tests, no linter/formatter, no CI. Style is set by the existing files.
 - The app is a reader as well as a configuration window: `CFBundleDocumentTypes` claims all seven formats as `Viewer` / `LSHandlerRank: Alternate`, so EBookQL appears in *Open With* without taking over the default handler, and Quick Look (Space) is untouched.
 - One reader implementation: `EBookQLReader/` is compiled into the app and into `EBookQLPreview`, `EBookQLMarkdownPreview` and `EBookQLCHMPreview`. Never fork it per host.
+- Text search is app-only by design: `ReaderWindowContentViewController` adds a native `⌘F` bar and calls the page's `window.ekbFind*` API. Quick Look still instantiates the shared reader directly, because its panel cannot receive keyboard focus.
 - The reading-position database is shared: the app passes `SettingsStore.sharedPositionsPath` (the preview appex's container), so a book resumes where it was left in either host. Same for settings - the app reads `SettingsStore` directly and the appexes read `settings.json`.
 - Core is `library.static` on purpose: an ad-hoc-signed appex cannot load an embedded dylib ("different Team IDs"). Do NOT convert EBookQLKit to a framework.
 - A static lib carries no resources → reader CSS/JS live as Swift string literals in `ReaderAssets.swift`.

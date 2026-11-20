@@ -39,6 +39,15 @@ struct EBookQLApp: App {
                 Button("Settings…") { SettingsWindow.shared.show() }
                     .keyboardShortcut(",", modifiers: .command)
             }
+            CommandGroup(after: .pasteboard) {
+                Divider()
+                Button("Find…") { ReaderWindows.shared.showFind() }
+                    .keyboardShortcut("f", modifiers: .command)
+                Button("Find Next") { ReaderWindows.shared.findNext() }
+                    .keyboardShortcut("g", modifiers: .command)
+                Button("Find Previous") { ReaderWindows.shared.findPrevious() }
+                    .keyboardShortcut("g", modifiers: [.command, .shift])
+            }
         }
     }
 }

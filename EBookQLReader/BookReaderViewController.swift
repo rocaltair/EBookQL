@@ -57,6 +57,8 @@ class BookReaderViewController: NSViewController, WKNavigationDelegate, WKScript
     private var scopedResourceURL: URL?
     private(set) var workDirectory: URL?
     private(set) var currentBookURL: URL?
+    /// Page-image books have no text for a find operation to match.
+    private(set) var supportsTextSearch = false
     private var currentBookSize: Int?
     /// The last position reported by the live page. A Markdown refresh must carry
     /// this explicitly: the file size has changed, so the database's size check
@@ -164,6 +166,7 @@ class BookReaderViewController: NSViewController, WKNavigationDelegate, WKScript
         if url.startAccessingSecurityScopedResource() { scopedResourceURL = url }
         let bookURL = url.standardizedFileURL
         currentBookURL = bookURL
+        supportsTextSearch = false
 
         let bookSize = (try? FileManager.default.attributesOfItem(atPath: url.path))?[.size] as? Int
         currentBookSize = bookSize
@@ -231,6 +234,7 @@ class BookReaderViewController: NSViewController, WKNavigationDelegate, WKScript
                     // Hand the archive to the scheme handler before the page loads, so
                     // the images it asks for never need another trip to the volume.
                     self.schemeHandler.source = rendered.resources
+                    self.supportsTextSearch = rendered.searchable
                     self.webView.loadFileURL(indexURL, allowingReadAccessTo: workDirectory)
                     self.updatePanelSize()
                     if let url = self.currentBookURL {
@@ -255,6 +259,7 @@ class BookReaderViewController: NSViewController, WKNavigationDelegate, WKScript
                 DispatchQueue.main.async {
                     guard self.generation == token else { return }
                     self.schemeHandler.source = nil
+                    self.supportsTextSearch = false
                     self.webView.loadHTMLString(html, baseURL: nil)
                     self.onFailure?(error)
                 }
@@ -268,13 +273,14 @@ class BookReaderViewController: NSViewController, WKNavigationDelegate, WKScript
         let sections: Int
         let title: String?
         let author: String?
+        let searchable: Bool
     }
 
     /// Parses the book and builds the page. Runs off the main thread.
     private static func render(url: URL, workDirectory: URL, options: ReaderDocument.Options) throws -> Rendered {
         guard BookOpener.backend(for: url) != nil else {
             return Rendered(html: ReaderDocument.placeholderHTML(fileName: url.lastPathComponent, options: options),
-                            resources: nil, sections: 0, title: nil, author: nil)
+                            resources: nil, sections: 0, title: nil, author: nil, searchable: false)
         }
         let t0 = Date()
         // One call for every format: the facade picks the backend by extension and hands each
@@ -292,11 +298,17 @@ class BookReaderViewController: NSViewController, WKNavigationDelegate, WKScript
         let t2 = Date()
         os_log("open %.2fs build %.2fs", log: renderLog, type: .info,
                t1.timeIntervalSince(t0), t2.timeIntervalSince(t1))
+        let searchable: Bool
+        switch book.format {
+        case .djvu, .cbz: searchable = false
+        default: searchable = true
+        }
         return Rendered(html: page.html,
                         resources: book.resources as? ResourceSource,
                         sections: book.sections.count,
                         title: book.metadata.title,
-                        author: book.metadata.author)
+                        author: book.metadata.author,
+                        searchable: searchable)
     }
 
     /// `.system` becomes a concrete scheme from the host's own appearance, because the

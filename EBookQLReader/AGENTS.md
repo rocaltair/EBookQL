@@ -12,6 +12,8 @@ The reader host shared by every host that shows a book: the app's reader windows
 | JS→native handlers (position / ui / zoom / copy) | BookReaderViewController.swift:321 |
 | Reading position read/write | BookReaderViewController.swift:167 / :344 |
 | Zoom ladder + persistence | BookReaderViewController.swift:30–50, :385 |
+| App-only find bar + keyboard handling | ../EBookQLApp/ReaderFindBar.swift |
+| Text-search availability | BookReaderViewController.swift:60 (`supportsTextSearch`) |
 | External-link policy (app only) | BookReaderViewController.swift:405 |
 | Temp extraction dirs + stale sweep | BookReaderViewController.swift:170, :438 |
 | `ekbres://` resource serving | ReaderSchemeHandler.swift |
@@ -24,6 +26,8 @@ The reader host shared by every host that shows a book: the app's reader windows
 - `settingsProvider` is called with the URL and returns nil for a format with no settings of its own: EPUB/MOBI never pay for a settings read, while Markdown and FB2 do.
 - `readingPositionStore` is injected. An appex keeps the default (its sandbox container); the app passes `SettingsStore.sharedPositionsPath` so a book has one position whether it was read in the panel or in the app.
 - `opensExternalLinks` is off by default so Quick Look keeps its old behaviour; the app turns it on and hands http/https/mailto to the browser instead of navigating the reader away from the book.
+- The app wraps this controller in `ReaderWindowContentViewController`, which adds the native find bar. Quick Look instantiates `BookReaderViewController` directly, so it has no find UI. The page exposes `window.ekbFind`, `ekbFindStep` and `ekbFindClose`; the native field owns text entry, IME, Return/Escape and menu shortcuts, while the page owns hit marking and scrolling.
+- `supportsTextSearch` becomes true only after a text backend renders; DjVu and CBZ are false because their pages contain no text layer. Do not put a focusable search field in the generated page: the Quick Look panel never receives the keystrokes.
 - `workDirectoryPrefix` separates hosts' temp dirs (`EBookQL_` for appexes, `EBookQLReader_` for the app) so one host's stale sweep can never delete a directory another live host is still reading from.
 - Resources are reached through `ekbres://`, and the reserved `assets` host reads `Bundle.main` - the appex bundle in Quick Look, the app bundle in the app. Both bundles therefore carry `ReaderAssets/` (app) and `DjVuAssets/` (app) at their resource root, flat.
 - A load carries a generation token: a slow render for a book the reader has already navigated away from is dropped instead of painting over the newer one.

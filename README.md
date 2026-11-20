@@ -20,6 +20,12 @@ both rendered entirely offline.
   icon. One window per book, at the position you left it — the same position the Quick Look
   panel restores. EBookQL is offered as an *alternate* handler, so Space in the Finder still
   previews and your current reader keeps the double-click.
+- **Find in a reader window** — `⌘F` opens a native find bar above the page, `↩` or `⌘G`
+  goes to the next match, and `⇧↩` or `⇧⌘G` goes to the previous one. The page highlights
+  every match and the bar shows which one is current; `Esc` closes the bar and restores the
+  text. This is deliberately app-only: Quick Look preview panels do not accept keyboard
+  input, so they carry no search control that cannot be typed into. DjVu and CBZ pages
+  have no text layer and report that there is no text to search.
 - **Quick Look preview** — a full window in the Finder's Quick Look panel: the book's own
   text (or, for a scan or a comic, its pages) in a readable column, its images, and a covering
   page instead of a blank panel.
@@ -131,6 +137,9 @@ Opening a book you already have open brings that window forward instead of stack
   light/dark appearance.
 - A link to the web opens in your browser instead of replacing the book (Quick Look keeps its
   own behaviour).
+- `⌘F` searches the open book from the native reader window. `⌘G` and `⇧⌘G` step through
+  matches; the sidebar needs no extra control, and a book without a table of contents can
+  still be searched.
 - The reading position is the same SQLite file Quick Look writes, so a page read in the panel is
   where the app reopens, and the other way round (`./install.sh history` still lists it). Before
   the preview extension has ever run there is no such container, and the app keeps its own

@@ -21,7 +21,13 @@ final class ReaderWindows: NSObject, NSWindowDelegate {
 
     static let shared = ReaderWindows()
 
-    private var windows: [URL: NSWindow] = [:]
+    private struct Entry {
+        let window: NSWindow
+        let content: ReaderWindowContentViewController
+        var reader: BookReaderViewController { content.reader }
+    }
+
+    private var windows: [URL: Entry] = [:]
 
     private override init() {
         super.init()
@@ -48,7 +54,7 @@ final class ReaderWindows: NSObject, NSWindowDelegate {
     func open(_ url: URL) {
         let url = url.standardizedFileURL
         if let existing = windows[url] {
-            existing.makeKeyAndOrderFront(nil)
+            existing.window.makeKeyAndOrderFront(nil)
             NSApp.activate(ignoringOtherApps: true)
             return
         }
@@ -61,14 +67,15 @@ final class ReaderWindows: NSObject, NSWindowDelegate {
         reader.workDirectoryPrefix = "EBookQLReader_"
         reader.staleWorkDirectoryAge = 24 * 60 * 60
 
-        let window = NSWindow(contentViewController: reader)
+        let content = ReaderWindowContentViewController(reader: reader)
+        let window = NSWindow(contentViewController: content)
         window.title = url.lastPathComponent
         window.representedURL = url
         window.minSize = NSSize(width: 480, height: 400)
         window.setContentSize(NSSize(width: 1000, height: 900))
         window.setFrameAutosaveName("EBookQLReaderWindow")
         window.delegate = self
-        windows[url] = window
+        windows[url] = Entry(window: window, content: content)
 
         reader.onBookOpened = { [weak window] info in
             let parts = [info.title, info.author].compactMap { $0 }.filter { !$0.isEmpty }
@@ -97,23 +104,46 @@ final class ReaderWindows: NSObject, NSWindowDelegate {
         for url in panel.urls { open(url) }
     }
 
+    func showFind() {
+        activeReader?.content.showFind()
+    }
+
+    func findNext() {
+        activeReader?.content.findNext()
+    }
+
+    func findPrevious() {
+        activeReader?.content.findPrevious()
+    }
+
+    private var activeReader: Entry? {
+        if let key = NSApp.keyWindow,
+           let entry = windows.values.first(where: { $0.window === key }) {
+            return entry
+        }
+        if let main = NSApp.mainWindow,
+           let entry = windows.values.first(where: { $0.window === main }) {
+            return entry
+        }
+        return nil
+    }
+
     /// Settings changes reach the reader through the app's own notification, not a
     /// file read: only the formats the settings actually affect are reloaded, and the
     /// reload resumes from the position the reader was already at.
     func settingsDidChange() {
-        for (url, window) in windows {
-            guard let reader = window.contentViewController as? BookReaderViewController else { continue }
+        for (url, entry) in windows {
             let ext = url.pathExtension.lowercased()
             let affected = MarkdownBackend.supportedExtensions.contains(ext)
                 || FB2Backend.supportedExtensions.contains(ext)
             guard affected else { continue }
-            reader.loadBook(at: url)
+            entry.reader.loadBook(at: url)
         }
     }
 
     func windowWillClose(_ notification: Notification) {
         guard let window = notification.object as? NSWindow else { return }
-        windows = windows.filter { $0.value !== window }
+        windows = windows.filter { $0.value.window !== window }
     }
 }
 
